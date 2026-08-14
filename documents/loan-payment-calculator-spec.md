@@ -100,6 +100,10 @@ lãi kỳ = dư nợ chịu lãi × lãi suất năm × số ngày thực tế /
 
 Khi có nhiều đợt giải ngân, từng đợt chỉ bắt đầu chịu lãi từ đúng ngày giải ngân. Vì thế không thể đơn giản tính lãi trên toàn bộ hạn mức ngay từ ngày đầu.
 
+Mỗi khoản giải ngân được theo dõi như một dư nợ con. Nếu ngày trả nợ gần nhất cách ngày giải ngân dưới 30 ngày, dư nợ con đó chỉ trả lãi tại kỳ này và chưa trả gốc. Những khoản giải ngân cũ đã đủ 30 ngày vẫn trả gốc bình thường. Từ mốc đủ 30 ngày, phần gốc của khoản mới được cộng vào dòng tổng hợp theo phương thức trả nợ đã chọn.
+
+Nếu kỳ thanh toán đầu tiên chưa đủ 30 ngày kể từ lần giải ngân đầu, kỳ đó được hiển thị là **kỳ 0** và không làm giảm số tháng trả gốc đã nhập. Ví dụ thời hạn 120 tháng sẽ gồm kỳ 0 chỉ trả lãi, sau đó đủ các kỳ trả gốc từ 1 đến 120. Người dùng có thể bật tùy chọn **trả gốc ngay kỳ đầu tiên** theo thỏa thuận riêng với ngân hàng; khi bật, lần giải ngân đầu được trả gốc ngay và lịch bắt đầu từ kỳ 1. Tùy chọn này không bỏ quy tắc 30 ngày đối với các lần giải ngân bổ sung. Tổng gốc định kỳ và gốc trả trước trong toàn lịch phải bằng chính xác tổng số tiền thực tế đã giải ngân.
+
 Nếu trong một kỳ có đổi lãi suất hoặc giải ngân, kỳ đó được tách thành các đoạn nhỏ; lãi kỳ là tổng lãi của từng đoạn. Cách này phản ánh gần nhất cách tính theo dư nợ thực tế của ngân hàng.
 
 ### 3.2. Gốc cố định, lãi giảm dần
@@ -198,6 +202,7 @@ type LoanInput = {
   termMonths: number;
   paymentDay: number;
   principalGraceMonths: number;
+  payPrincipalFirstPeriod: boolean;
   dayCountConvention: 'actual_365' | 'actual_360' | 'thirty_360';
   rates: RatePeriod[];
   prepayments: Prepayment[];

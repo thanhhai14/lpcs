@@ -5,6 +5,7 @@ export const metadata: Metadata = {
   title: "Kế hoạch vay | Ước tính dòng tiền dự án",
   description:
     "Công cụ lập kế hoạch giải ngân và ước tính lịch trả nợ ngân hàng theo ngày.",
+  icons: { icon: "/icon.svg" },
 };
 
 export const viewport: Viewport = {

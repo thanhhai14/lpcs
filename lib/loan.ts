@@ -27,6 +27,7 @@ export type LoanInput = {
   paymentDay: number;
   repaymentMethod: RepaymentMethod;
   principalGraceMonths: number;
+  payPrincipalFirstPeriod: boolean;
   promotionalRate: number;
   promotionalMonths: number;
   postPromotionalRate: number;
@@ -64,6 +65,15 @@ type TimelineEvent = {
   date: string;
   kind: "disbursement" | "prepayment" | "rate_change";
   amount?: number;
+  trancheId?: string;
+};
+
+type LoanTranche = {
+  id: string;
+  disbursementDate: string;
+  balance: number;
+  lockedEqualPrincipal: number;
+  lockedAnnuityPayment: number;
 };
 
 const DAY_MS = 86_400_000;
@@ -122,15 +132,18 @@ function annuityPayment(balance: number, annualRate: number, periods: number) {
 export function calculateSchedule(input: LoanInput): ScheduleRow[] {
   const disbursements = input.installments
     .filter((item) => item.bankCapitalAmount > 0 && item.disbursementDate)
-    .map((item) => ({ date: item.disbursementDate, amount: item.bankCapitalAmount }));
+    .map((item) => ({ id: item.id, date: item.disbursementDate, amount: item.bankCapitalAmount }));
 
   if (!disbursements.length || input.termMonths <= 0) return [];
 
   const startDate = disbursements.map((item) => item.date).sort()[0];
   const firstDue = firstDueDate(startDate, input.paymentDay);
+  const hasInitialInterestOnlyPeriod = daysBetween(startDate, firstDue) < 30 && !input.payPrincipalFirstPeriod;
+  const contractualRows = input.termMonths + (hasInitialInterestOnlyPeriod ? 1 : 0);
+  const maximumRows = contractualRows + 600;
   const promotionEnd = addMonths(startDate, input.promotionalMonths);
   const events: TimelineEvent[] = [
-    ...disbursements.map((item): TimelineEvent => ({ ...item, kind: "disbursement" })),
+    ...disbursements.map((item): TimelineEvent => ({ date: item.date, amount: item.amount, trancheId: item.id, kind: "disbursement" })),
     ...input.prepayments
       .filter((item) => item.amount > 0 && item.date >= startDate)
       .map((item): TimelineEvent => ({ date: item.date, amount: item.amount, kind: "prepayment" })),
@@ -140,15 +153,19 @@ export function calculateSchedule(input: LoanInput): ScheduleRow[] {
   events.sort((a, b) => a.date.localeCompare(b.date));
 
   const rows: ScheduleRow[] = [];
+  const tranches: LoanTranche[] = [];
   let balance = 0;
   let displayedBalance = 0;
   let previousDue = startDate;
-  let lockedEqualPrincipal = 0;
-  let lockedAnnuityPayment = 0;
   let eventIndex = 0;
 
-  for (let period = 1; period <= input.termMonths && (balance > 0.5 || eventIndex < events.length); period += 1) {
-    const dueDate = addMonths(firstDue, period - 1);
+  for (
+    let rowIndex = 0;
+    rowIndex < maximumRows && (balance > 0.5 || eventIndex < events.length);
+    rowIndex += 1
+  ) {
+    const period = rowIndex + (hasInitialInterestOnlyPeriod ? 0 : 1);
+    const dueDate = addMonths(firstDue, rowIndex);
     const openingBalance = displayedBalance;
     const periodEvents: TimelineEvent[] = [];
 
@@ -169,49 +186,75 @@ export function calculateSchedule(input: LoanInput): ScheduleRow[] {
     let prepayment = 0;
     let prepaymentPenalty = 0;
     const segments: InterestSegment[] = [];
+    const trancheInterest = new Map<string, number>();
+
+    const accrueInterest = (from: string, to: string) => {
+      const days = daysBetween(from, to);
+      if (days <= 0 || balance <= 0) return;
+      const annualRate = rateAt(from, startDate, input);
+      let segmentInterest = 0;
+      for (const tranche of tranches) {
+        if (tranche.balance <= 0) continue;
+        const value = tranche.balance * (annualRate / 100) * (days / 365);
+        segmentInterest += value;
+        trancheInterest.set(tranche.id, (trancheInterest.get(tranche.id) ?? 0) + value);
+      }
+      interest += segmentInterest;
+      segments.push({ from, to, days, balance, annualRate, interest: segmentInterest });
+    };
+
+    const addDisbursement = (event: TimelineEvent) => {
+      const amount = event.amount ?? 0;
+      if (amount <= 0) return;
+      tranches.push({
+        id: event.trancheId ?? `tranche-${tranches.length + 1}`,
+        disbursementDate: event.date,
+        balance: amount,
+        lockedEqualPrincipal: 0,
+        lockedAnnuityPayment: 0,
+      });
+      balance += amount;
+      disbursed += amount;
+    };
+
+    const applyPrepayment = (requestedAmount: number) => {
+      let remaining = Math.min(balance, requestedAmount);
+      const paid = remaining;
+      // The UI does not select a target drawdown, so extra principal is applied
+      // to the oldest outstanding drawdown first.
+      for (const tranche of tranches) {
+        if (remaining <= 0) break;
+        const tranchePaid = Math.min(tranche.balance, remaining);
+        tranche.balance -= tranchePaid;
+        balance -= tranchePaid;
+        remaining -= tranchePaid;
+        if (tranchePaid > 0 && input.prepaymentEffect === "reduce_payment") {
+          tranche.lockedEqualPrincipal = 0;
+          tranche.lockedAnnuityPayment = 0;
+        }
+      }
+      return paid;
+    };
 
     for (const event of periodEvents) {
-      const days = daysBetween(cursor, event.date);
-      if (days > 0 && balance > 0) {
-        const annualRate = rateAt(cursor, startDate, input);
-        const segmentInterest = balance * (annualRate / 100) * (days / 365);
-        interest += segmentInterest;
-        segments.push({ from: cursor, to: event.date, days, balance, annualRate, interest: segmentInterest });
-      }
+      accrueInterest(cursor, event.date);
 
       if (event.kind === "disbursement") {
-        balance += event.amount ?? 0;
-        disbursed += event.amount ?? 0;
-        lockedEqualPrincipal = 0;
-        lockedAnnuityPayment = 0;
+        addDisbursement(event);
       } else if (event.kind === "prepayment") {
-        const paid = Math.min(balance, event.amount ?? 0);
-        balance -= paid;
+        const paid = applyPrepayment(event.amount ?? 0);
         prepayment += paid;
         prepaymentPenalty += paid * (input.prepaymentPenaltyRate / 100);
-        if (input.prepaymentEffect === "reduce_payment") {
-          lockedEqualPrincipal = 0;
-          lockedAnnuityPayment = 0;
-        }
       } else if (event.kind === "rate_change") {
-        lockedAnnuityPayment = 0;
+        for (const tranche of tranches) tranche.lockedAnnuityPayment = 0;
       }
       cursor = event.date;
     }
 
-    const finalDays = daysBetween(cursor, dueDate);
-    if (finalDays > 0 && balance > 0) {
-      const annualRate = rateAt(cursor, startDate, input);
-      const segmentInterest = balance * (annualRate / 100) * (finalDays / 365);
-      interest += segmentInterest;
-      segments.push({ from: cursor, to: dueDate, days: finalDays, balance, annualRate, interest: segmentInterest });
-    }
+    accrueInterest(cursor, dueDate);
 
     for (const event of dueEvents.filter((item) => item.kind === "disbursement")) {
-      balance += event.amount ?? 0;
-      disbursed += event.amount ?? 0;
-      lockedEqualPrincipal = 0;
-      lockedAnnuityPayment = 0;
+      addDisbursement(event);
     }
 
     const graceFinished = period > input.principalGraceMonths;
@@ -219,30 +262,39 @@ export function calculateSchedule(input: LoanInput): ScheduleRow[] {
     let principal = 0;
 
     if (graceFinished && balance > 0) {
-      if (input.repaymentMethod === "annuity") {
-        if (!lockedAnnuityPayment || input.prepaymentEffect === "reduce_payment") {
-          lockedAnnuityPayment = annuityPayment(balance, rateAt(dueDate, startDate, input), remainingPeriods);
+      for (const tranche of tranches) {
+        const isInitialDrawdownAtFirstDue = input.payPrincipalFirstPeriod
+          && tranche.disbursementDate === startDate
+          && dueDate === firstDue;
+        if (
+          tranche.balance <= 0
+          || (daysBetween(tranche.disbursementDate, dueDate) < 30 && !isInitialDrawdownAtFirstDue)
+        ) continue;
+        let tranchePrincipal = 0;
+        if (input.repaymentMethod === "annuity") {
+          if (!tranche.lockedAnnuityPayment) {
+            tranche.lockedAnnuityPayment = annuityPayment(tranche.balance, rateAt(dueDate, startDate, input), remainingPeriods);
+          }
+          tranchePrincipal = Math.min(
+            tranche.balance,
+            Math.max(0, tranche.lockedAnnuityPayment - (trancheInterest.get(tranche.id) ?? 0)),
+          );
+        } else {
+          if (!tranche.lockedEqualPrincipal) {
+            tranche.lockedEqualPrincipal = tranche.balance / remainingPeriods;
+          }
+          tranchePrincipal = Math.min(tranche.balance, tranche.lockedEqualPrincipal);
         }
-        principal = Math.min(balance, Math.max(0, lockedAnnuityPayment - interest));
-      } else {
-        if (!lockedEqualPrincipal || input.prepaymentEffect === "reduce_payment") {
-          lockedEqualPrincipal = balance / remainingPeriods;
-        }
-        principal = Math.min(balance, lockedEqualPrincipal);
+        tranche.balance -= tranchePrincipal;
+        balance -= tranchePrincipal;
+        principal += tranchePrincipal;
       }
     }
 
-    balance -= principal;
-
     for (const event of dueEvents.filter((item) => item.kind === "prepayment")) {
-      const paid = Math.min(balance, event.amount ?? 0);
-      balance -= paid;
+      const paid = applyPrepayment(event.amount ?? 0);
       prepayment += paid;
       prepaymentPenalty += paid * (input.prepaymentPenaltyRate / 100);
-      if (input.prepaymentEffect === "reduce_payment") {
-        lockedEqualPrincipal = 0;
-        lockedAnnuityPayment = 0;
-      }
     }
 
     let roundedPrincipal = Math.round(principal);

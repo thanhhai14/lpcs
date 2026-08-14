@@ -57,6 +57,14 @@ export async function exportLoanWorkbook({ bankName, input, schedule }: ExportLo
   const totalPenalty = schedule.reduce((sum, row) => sum + row.prepaymentPenalty, 0);
   const totalCashflow = schedule.reduce((sum, row) => sum + row.totalCashflow, 0);
   const bankTotal = input.installments.reduce((sum, item) => sum + item.bankCapitalAmount, 0);
+  const payments = schedule.map((row) => row.scheduledPayment);
+  const interests = schedule.map((row) => row.interest);
+  const maxPayment = payments.length ? Math.max(...payments) : 0;
+  const averagePayment = payments.length ? Math.round(payments.reduce((sum, value) => sum + value, 0) / payments.length) : 0;
+  const minPayment = payments.length ? Math.min(...payments) : 0;
+  const maxInterest = interests.length ? Math.max(...interests) : 0;
+  const averageInterest = interests.length ? Math.round(totalInterest / interests.length) : 0;
+  const minInterest = interests.length ? Math.min(...interests) : 0;
 
   const overview: SheetData = [
     [title("LỊCH TRẢ NỢ DỰ KIẾN", 4), null, null, null],
@@ -64,11 +72,16 @@ export async function exportLoanWorkbook({ bankName, input, schedule }: ExportLo
     [label("Giá trị dự án"), money(input.projectValue), label("Hạn mức vay"), money(input.facilityAmount)],
     [label("Vốn ngân hàng đã phân bổ"), money(bankTotal), label("Thời hạn vay"), `${input.termMonths} tháng`],
     [label("Phương thức trả nợ"), repaymentLabel(input.repaymentMethod), label("Ngày trả nợ"), `Ngày ${input.paymentDay} hàng tháng`],
-    [label("Ân hạn gốc"), `${input.principalGraceMonths} tháng`, label("Phí trả trước"), { value: input.prepaymentPenaltyRate / 100, type: Number, format: "0.0%" }],
+    [label("Xử lý kỳ đầu"), input.payPrincipalFirstPeriod ? "Trả gốc và lãi (Kỳ 01)" : "Chỉ trả lãi nếu chưa đủ 30 ngày (Kỳ 00)", label("Ân hạn gốc"), `${input.principalGraceMonths} tháng`],
+    [label("Phí trả trước"), { value: input.prepaymentPenaltyRate / 100, type: Number, format: "0.0%" }, label("Quy ước tính lãi"), "Actual/365"],
     [label("Lãi suất ưu đãi"), { value: input.promotionalRate / 100, type: Number, format: "0.0%" }, label("Thời gian ưu đãi"), `${input.promotionalMonths} tháng`],
-    [label("Lãi sau ưu đãi (dự kiến)"), { value: input.postPromotionalRate / 100, type: Number, format: "0.0%" }, label("Quy ước tính lãi"), "Actual/365"],
+    [label("Lãi sau ưu đãi (dự kiến)"), { value: input.postPromotionalRate / 100, type: Number, format: "0.0%" }, null, null],
     [label("Tổng lãi dự kiến"), money(totalInterest), label("Tổng gốc trả trước"), money(totalPrepayment)],
     [label("Tổng phí trả trước"), money(totalPenalty), label("Tổng dòng tiền trả ngân hàng"), money(totalCashflow)],
+    [label("Trả nợ cao nhất trong kỳ"), money(maxPayment), label("Tiền lãi cao nhất trong kỳ"), money(maxInterest)],
+    [label("Trả nợ trung bình hàng tháng"), money(averagePayment), label("Tiền lãi trung bình hàng tháng"), money(averageInterest)],
+    [label("Trả nợ thấp nhất trong kỳ"), money(minPayment), label("Tiền lãi thấp nhất trong kỳ"), money(minInterest)],
+    [{ value: "Các chỉ số trả nợ trên là gốc + lãi định kỳ, không gồm trả trước và phí.", columnSpan: 4, fontStyle: "italic", textColor: "#6d817d", fontSize: 9 }, null, null, null],
     [null, null, null, null],
     [{ ...title("KẾ HOẠCH GIẢI NGÂN", 4), fontSize: 11, align: "left", height: 25 }, null, null, null],
     [header("Đợt thanh toán"), header("Ngày thanh toán CĐT"), header("Ngân hàng giải ngân"), header("Ngày giải ngân")],
