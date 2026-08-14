@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { calculateSchedule, type LoanInput, validateLoanInput } from "./loan.ts";
+import { calculateSchedule, paginateScheduleByYear, type LoanInput, validateLoanInput } from "./loan.ts";
 
 function input(overrides: Partial<LoanInput> = {}): LoanInput {
   return {
@@ -76,6 +76,20 @@ test("tùy chọn kỳ đầu không bỏ quy tắc 30 ngày cho đợt giải n
   assert.equal(rows[1].principal, 5_000_000);
   assert.equal(rows[2].principal, 11_000_000);
   assert.equal(rows.reduce((sum, row) => sum + row.principal + row.prepayment, 0), 120_000_000);
+});
+
+test("phân trang theo 12 tháng và ghép kỳ 0 vào trang đầu", () => {
+  const withPeriodZero = paginateScheduleByYear(calculateSchedule(input({ termMonths: 24 })));
+  const withoutPeriodZero = paginateScheduleByYear(calculateSchedule(input({ termMonths: 24, payPrincipalFirstPeriod: true })));
+
+  assert.deepEqual(withPeriodZero.map((page) => page.map((row) => row.period)), [
+    Array.from({ length: 13 }, (_, index) => index),
+    Array.from({ length: 12 }, (_, index) => index + 13),
+  ]);
+  assert.deepEqual(withoutPeriodZero.map((page) => page.map((row) => row.period)), [
+    Array.from({ length: 12 }, (_, index) => index + 1),
+    Array.from({ length: 12 }, (_, index) => index + 13),
+  ]);
 });
 
 test("đợt giải ngân sau chỉ phát sinh lãi từ ngày giải ngân", () => {

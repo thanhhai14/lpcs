@@ -2,9 +2,10 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Kế hoạch vay | Ước tính dòng tiền dự án",
+  applicationName: "LPCS",
+  title: "LPCS | Loan Payment Calculator Spec",
   description:
-    "Công cụ lập kế hoạch giải ngân và ước tính lịch trả nợ ngân hàng theo ngày.",
+    "Công cụ lập tiến độ thanh toán, phân bổ nguồn vốn và tính lịch trả nợ ngân hàng theo ngày.",
   icons: { icon: "/icon.svg" },
 };
 

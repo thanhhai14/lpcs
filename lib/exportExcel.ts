@@ -10,6 +10,7 @@ type ExportLoanWorkbookInput = {
 const DARK = "#10483e";
 const ACCENT = "#c5df6f";
 const LIGHT = "#eff5f2";
+const ZEBRA = "#f2f5f3";
 const BORDER = "#d9e2de";
 const MONEY_FORMAT = '#,##0 "₫"';
 
@@ -45,6 +46,11 @@ function title(value: string, columnSpan: number): Cell {
   return { value, columnSpan, fontWeight: "bold", fontSize: 17, textColor: "#ffffff", backgroundColor: DARK, align: "center", alignVertical: "center", height: 34 };
 }
 
+function stripedRow(cells: Cell[], rowIndex: number): Cell[] {
+  const backgroundColor = rowIndex % 2 === 0 ? "#ffffff" : ZEBRA;
+  return cells.map((cell) => ({ ...cell, backgroundColor, borderColor: BORDER, bottomBorderStyle: "hair" }));
+}
+
 function repaymentLabel(method: LoanInput["repaymentMethod"]) {
   return method === "annuity" ? "Trả góp đều (Annuity)" : "Gốc cố định, lãi giảm dần";
 }
@@ -57,6 +63,8 @@ export async function exportLoanWorkbook({ bankName, input, schedule }: ExportLo
   const totalPenalty = schedule.reduce((sum, row) => sum + row.prepaymentPenalty, 0);
   const totalCashflow = schedule.reduce((sum, row) => sum + row.totalCashflow, 0);
   const bankTotal = input.installments.reduce((sum, item) => sum + item.bankCapitalAmount, 0);
+  const ownCapitalTotal = input.installments.reduce((sum, item) => sum + item.ownCapitalAmount, 0);
+  const installmentTotal = input.installments.reduce((sum, item) => sum + item.amount, 0);
   const payments = schedule.map((row) => row.scheduledPayment);
   const interests = schedule.map((row) => row.interest);
   const maxPayment = payments.length ? Math.max(...payments) : 0;
@@ -67,7 +75,7 @@ export async function exportLoanWorkbook({ bankName, input, schedule }: ExportLo
   const minInterest = interests.length ? Math.min(...interests) : 0;
 
   const overview: SheetData = [
-    [title("LỊCH TRẢ NỢ DỰ KIẾN", 4), null, null, null],
+    [title("LPCS — TỔNG QUAN KHOẢN VAY", 4), null, null, null],
     [label("Ngày lập báo cáo"), date(generatedAt, true), label("Ngân hàng"), bankName.trim() || "Chưa nhập"],
     [label("Giá trị dự án"), money(input.projectValue), label("Hạn mức vay"), money(input.facilityAmount)],
     [label("Vốn ngân hàng đã phân bổ"), money(bankTotal), label("Thời hạn vay"), `${input.termMonths} tháng`],
@@ -96,14 +104,34 @@ export async function exportLoanWorkbook({ bankName, input, schedule }: ExportLo
   ];
 
   const scheduleHeaders = ["Kỳ", "Ngày đến hạn", "Số ngày", "Dư nợ đầu kỳ", "Giải ngân trong kỳ", "Gốc định kỳ", "Lãi", "Gốc + lãi", "Trả trước", "Phí trả trước", "Tổng thực trả", "Dư nợ cuối kỳ"];
+  const installmentHeaders = ["Đợt thanh toán", "Ngày thanh toán CĐT", "Giá trị đợt", "Vốn tự có", "Vốn ngân hàng", "Ngày giải ngân"];
+  const installmentData: SheetData = [
+    [title("LPCS — TIẾN ĐỘ THANH TOÁN DỰ ÁN", 6), ...Array<Cell | null>(5).fill(null)],
+    installmentHeaders.map(header),
+    ...input.installments.map((item, index) => stripedRow([
+      { value: item.name || "Chưa đặt tên" },
+      item.dueDate ? date(excelDate(item.dueDate)) : { value: "Chưa nhập" },
+      money(item.amount),
+      money(item.ownCapitalAmount),
+      money(item.bankCapitalAmount),
+      item.bankCapitalAmount > 0 && item.disbursementDate ? date(excelDate(item.disbursementDate)) : { value: "—" },
+    ], index)),
+    [
+      { value: "TỔNG", columnSpan: 2, fontWeight: "bold", textColor: "#ffffff", backgroundColor: DARK }, null,
+      { ...money(installmentTotal), fontWeight: "bold", textColor: "#ffffff", backgroundColor: DARK },
+      { ...money(ownCapitalTotal), fontWeight: "bold", textColor: "#ffffff", backgroundColor: DARK },
+      { ...money(bankTotal), fontWeight: "bold", textColor: "#ffffff", backgroundColor: DARK },
+      { value: "", backgroundColor: DARK },
+    ],
+  ];
   const scheduleData: SheetData = [
-    [title("LỊCH TRẢ NỢ DỰ KIẾN", 12), ...Array<Cell | null>(11).fill(null)],
+    [title("LPCS — LỊCH TRẢ NỢ DỰ KIẾN", 12), ...Array<Cell | null>(11).fill(null)],
     scheduleHeaders.map(header),
-    ...schedule.map((item) => [
-      item.period, date(excelDate(item.dueDate)), item.days, money(item.openingBalance), money(item.disbursed),
+    ...schedule.map((item, index) => stripedRow([
+      { value: item.period, type: Number }, date(excelDate(item.dueDate)), { value: item.days, type: Number }, money(item.openingBalance), money(item.disbursed),
       money(item.principal), money(item.interest), money(item.scheduledPayment), money(item.prepayment),
       money(item.prepaymentPenalty), money(item.totalCashflow), money(item.closingBalance),
-    ] as Cell[]),
+    ], index)),
     [
       { value: "TỔNG", columnSpan: 3, fontWeight: "bold", textColor: "#ffffff", backgroundColor: DARK }, null, null, null, null,
       { ...money(schedule.reduce((sum, row) => sum + row.principal, 0)), fontWeight: "bold", textColor: "#ffffff", backgroundColor: DARK },
@@ -125,6 +153,15 @@ export async function exportLoanWorkbook({ bankName, input, schedule }: ExportLo
       zoomScale: 0.9,
     },
     {
+      data: installmentData,
+      sheet: "Tiến độ dự án",
+      columns: [28, 20, 20, 20, 20, 18].map((width) => ({ width })),
+      stickyRowsCount: 2,
+      showGridLines: false,
+      orientation: "landscape",
+      zoomScale: 0.9,
+    },
+    {
       data: scheduleData,
       sheet: "Lịch trả nợ",
       columns: [8, 14, 10, 19, 19, 18, 17, 18, 17, 16, 19, 19].map((width) => ({ width })),
@@ -133,5 +170,5 @@ export async function exportLoanWorkbook({ bankName, input, schedule }: ExportLo
       orientation: "landscape",
       zoomScale: 0.8,
     },
-  ], { fontFamily: "Calibri", fontSize: 10 }).toFile(`lich-tra-no_${localDateStamp(generatedAt)}.xlsx`);
+  ], { fontFamily: "Calibri", fontSize: 10 }).toFile(`lpcs_lich-tra-no_${localDateStamp(generatedAt)}.xlsx`);
 }

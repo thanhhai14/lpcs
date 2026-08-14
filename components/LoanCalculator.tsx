@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   calculateSchedule,
+  paginateScheduleByYear,
   type LoanInput,
   type Prepayment,
   type ProjectInstallment,
@@ -148,17 +149,17 @@ function resizeInstallment(item: ProjectInstallment, amount: number): ProjectIns
 export function LoanCalculator() {
   const [input, setInput] = useState<LoanInput>(initialInput);
   const [bankName, setBankName] = useState("Ngân hàng dự kiến");
-  const [expandedPeriod, setExpandedPeriod] = useState<number | null>(1);
+  const [expandedPeriod, setExpandedPeriod] = useState<number | null>(null);
   const [page, setPage] = useState(1);
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState("");
   const [storageReady, setStorageReady] = useState(false);
   const validation = useMemo(() => validateLoanInput(input), [input]);
   const schedule = useMemo(() => calculateSchedule(input), [input]);
-  const pageSize = 12;
-  const pageCount = Math.max(1, Math.ceil(schedule.length / pageSize));
+  const schedulePages = useMemo(() => paginateScheduleByYear(schedule), [schedule]);
+  const pageCount = Math.max(1, schedulePages.length);
   const currentPage = Math.min(page, pageCount);
-  const visibleSchedule = schedule.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const visibleSchedule = schedulePages[currentPage - 1] ?? [];
   const totals = useMemo(
     () => schedule.reduce((result, row) => ({ interest: result.interest + row.interest, penalty: result.penalty + row.prepaymentPenalty, cashflow: result.cashflow + row.totalCashflow }), { interest: 0, penalty: 0, cashflow: 0 }),
     [schedule],
@@ -313,18 +314,18 @@ export function LoanCalculator() {
       <a className="skip-link" href="#calculator-main">Bỏ qua phần đầu, đến nội dung chính</a>
       <main id="calculator-main">
         <header className="topbar">
-          <a className="brand" href="#top" aria-label="Kế hoạch vay — về đầu trang">
+          <a className="brand" href="#top" aria-label="LPCS — về đầu trang">
             <span className="brand-mark"><Icon name="bank" size={20} /></span>
-            <span>Kế hoạch vay</span>
+            <span>LPCS</span>
           </a>
           <div className="topbar-meta"><span className="status-dot" /> Tự động lưu dữ liệu trên thiết bị này</div>
         </header>
 
         <section className="hero" id="top">
           <div className="hero-copy">
-            <span className="eyebrow">Ứng dụng lập kế hoạch vay</span>
+            <span className="eyebrow">Loan Payment Calculator Spec</span>
             <h1>Tính toán từng đồng<br />trước khi đặt bút vay.</h1>
-            <p>Kế hoạch vay giúp bạn xây dựng tiến độ thanh toán, phân bổ vốn tự có và vốn ngân hàng, đồng thời theo dõi chi tiết nghĩa vụ trả nợ theo từng tháng.</p>
+            <p>LPCS giúp bạn xây dựng tiến độ thanh toán, phân bổ vốn tự có và vốn ngân hàng, đồng thời theo dõi chi tiết nghĩa vụ trả nợ theo từng tháng.</p>
           </div>
           <div className="hero-ledger" aria-label="Tóm tắt kế hoạch">
             <div><span>Giá trị dự án</span><strong>{formatCurrency(input.projectValue)}</strong></div>
@@ -477,6 +478,18 @@ export function LoanCalculator() {
             <div><span>Phí trả trước</span><strong>{formatCurrency(totals.penalty)}</strong></div>
             <div className="summary-emphasis"><span>Tổng dòng tiền trả ngân hàng</span><strong>{formatCurrency(totals.cashflow)}</strong></div>
           </div>
+          <div className="project-payment-summary" aria-label="Tiến độ thanh toán cho chủ đầu tư">
+            <div className="project-payment-heading">
+              <div><strong>Tiến độ thanh toán dự án</strong><span>{input.installments.length} đợt · Đã phân bổ {input.projectValue ? Math.round((validation.installmentTotal / input.projectValue) * 100) : 0}% giá trị dự án</span></div>
+              <div className="project-funding-totals"><span>Vốn tự có <strong>{formatCurrency(validation.ownCapitalTotal)}</strong></span><span>Vốn ngân hàng <strong>{formatCurrency(validation.bankTotal)}</strong></span></div>
+            </div>
+            <div className="project-payment-scroll">
+              <table>
+                <thead><tr><th>Đợt thanh toán</th><th>Ngày thanh toán CĐT</th><th className="numeric">Giá trị đợt</th><th className="numeric">Vốn tự có</th><th className="numeric">Vốn ngân hàng</th><th>Ngày giải ngân</th></tr></thead>
+                <tbody>{input.installments.map((item) => <tr key={item.id}><td><strong>{item.name || "Chưa đặt tên"}</strong>{item.amountMode === "percentage" && <small>{item.percentage ?? 0}% giá trị dự án</small>}</td><td>{item.dueDate ? formatDate(item.dueDate) : "Chưa nhập"}</td><td className="numeric">{formatCurrency(item.amount)}</td><td className="numeric">{formatCurrency(item.ownCapitalAmount)}</td><td className="numeric">{formatCurrency(item.bankCapitalAmount)}</td><td>{item.bankCapitalAmount > 0 && item.disbursementDate ? formatDate(item.disbursementDate) : "—"}</td></tr>)}</tbody>
+              </table>
+            </div>
+          </div>
           <div className="calculation-statistics" aria-label="Thống kê khoản trả hàng tháng">
             <div className="statistics-heading"><strong>Biên độ trả nợ hàng tháng</strong><span>Gốc + lãi định kỳ, không gồm trả trước và phí.</span></div>
             <div><span>Trả nợ cao nhất trong kỳ</span><strong>{formatCurrency(statistics.maxPayment)}</strong></div>
@@ -491,12 +504,12 @@ export function LoanCalculator() {
             {schedule.length === 0 ? <div className="schedule-empty"><Icon name="calendar" size={24} /><h3>Chưa thể tạo lịch trả nợ</h3><p>Hãy thêm ít nhất một đợt giải ngân ngân hàng có ngày dự kiến.</p></div> : <>
               <div className="table-scroll">
                 <table className="schedule-table">
-                  <thead><tr><th aria-label="Mở chi tiết" /><th>Ngày tháng</th><th>Kỳ</th><th className="numeric">Số ngày</th><th className="numeric">Dư nợ còn lại</th><th className="numeric">Gốc phải trả</th><th className="numeric">Lãi phải trả</th><th className="numeric">Gốc + lãi</th><th className="numeric">Trả trước</th><th className="numeric">Phí phạt</th><th className="numeric total-col">Tổng thực trả</th></tr></thead>
+                  <thead><tr><th aria-label="Mở chi tiết" /><th>Ngày tháng</th><th className="period-col">Kỳ</th><th className="numeric days-col">Số ngày</th><th className="numeric">Dư nợ còn lại</th><th className="numeric">Gốc phải trả</th><th className="numeric">Lãi phải trả</th><th className="numeric">Gốc + lãi</th><th className="numeric">Trả trước</th><th className="numeric">Phí phạt</th><th className="numeric total-col">Tổng thực trả</th></tr></thead>
                   <tbody>{visibleSchedule.map((row) => <ScheduleTableRows key={row.period} row={row} expanded={expandedPeriod === row.period} onToggle={() => setExpandedPeriod(expandedPeriod === row.period ? null : row.period)} />)}</tbody>
                 </table>
               </div>
               <div className="mobile-schedule">{visibleSchedule.map((row) => <ScheduleCard key={row.period} row={row} expanded={expandedPeriod === row.period} onToggle={() => setExpandedPeriod(expandedPeriod === row.period ? null : row.period)} />)}</div>
-              {pageCount > 1 && <nav className="pagination" aria-label="Phân trang lịch trả nợ"><button type="button" disabled={currentPage === 1} onClick={() => setPage(Math.max(1, currentPage - 1))}>Trang trước</button><span>Trang {currentPage} / {pageCount}</span><button type="button" disabled={currentPage === pageCount} onClick={() => setPage(Math.min(pageCount, currentPage + 1))}>Trang sau <Icon name="arrow" size={15} /></button></nav>}
+              {pageCount > 1 && <nav className="pagination" aria-label="Phân trang lịch trả nợ"><button type="button" disabled={currentPage === 1} onClick={() => setPage(Math.max(1, currentPage - 1))}>Trang trước</button><span>Trang {currentPage} / {pageCount} · 12 tháng{currentPage === 1 && visibleSchedule[0]?.period === 0 ? " + Kỳ 0" : ""}</span><button type="button" disabled={currentPage === pageCount} onClick={() => setPage(Math.min(pageCount, currentPage + 1))}>Trang sau <Icon name="arrow" size={15} /></button></nav>}
             </>}
           </div>
           <p className="disclaimer"><Icon name="info" size={15} /> Kết quả mang tính tham khảo. Số liệu thực tế phụ thuộc quy tắc làm tròn, ngày hạch toán và điều khoản của ngân hàng.</p>
@@ -514,7 +527,7 @@ function SegmentDetails({ row }: { row: RowProps["row"] }) {
 }
 
 function ScheduleTableRows({ row, expanded, onToggle }: RowProps) {
-  return <><tr className={expanded ? "expanded" : ""}><td><button className="expand-button" type="button" aria-expanded={expanded} aria-label={`Chi tiết kỳ ${row.period}`} onClick={onToggle}><Icon name="chevron" size={15} /></button></td><td className="date-cell">{formatDate(row.dueDate)}</td><td><span className="period-pill">{String(row.period).padStart(2, "0")}</span></td><td className="numeric muted-number">{row.days}</td><td className="numeric balance-cell">{formatCurrency(row.closingBalance)}</td><td className="numeric">{formatCurrency(row.principal)}</td><td className="numeric">{formatCurrency(row.interest)}</td><td className="numeric">{formatCurrency(row.scheduledPayment)}</td><td className="numeric prepay-cell">{row.prepayment ? formatCurrency(row.prepayment) : "—"}</td><td className="numeric penalty-cell">{row.prepaymentPenalty ? formatCurrency(row.prepaymentPenalty) : "—"}</td><td className="numeric total-col"><strong>{formatCurrency(row.totalCashflow)}</strong></td></tr>{expanded && <tr className="detail-row"><td colSpan={11}><SegmentDetails row={row} /></td></tr>}</>;
+  return <><tr className={`schedule-data-row ${row.period % 2 === 0 ? "row-even" : "row-odd"}${expanded ? " expanded" : ""}`}><td><button className="expand-button" type="button" aria-expanded={expanded} aria-label={`Chi tiết kỳ ${row.period}`} onClick={onToggle}><Icon name="chevron" size={15} /></button></td><td className="date-cell">{formatDate(row.dueDate)}</td><td className="period-col"><span className="period-pill">{String(row.period).padStart(2, "0")}</span></td><td className="numeric muted-number days-col">{row.days}</td><td className="numeric balance-cell">{formatCurrency(row.closingBalance)}</td><td className="numeric">{formatCurrency(row.principal)}</td><td className="numeric">{formatCurrency(row.interest)}</td><td className="numeric">{formatCurrency(row.scheduledPayment)}</td><td className="numeric prepay-cell">{row.prepayment ? formatCurrency(row.prepayment) : "—"}</td><td className="numeric penalty-cell">{row.prepaymentPenalty ? formatCurrency(row.prepaymentPenalty) : "—"}</td><td className="numeric total-col"><strong>{formatCurrency(row.totalCashflow)}</strong></td></tr>{expanded && <tr className="detail-row"><td colSpan={11}><SegmentDetails row={row} /></td></tr>}</>;
 }
 
 function ScheduleCard({ row, expanded, onToggle }: RowProps) {
@@ -534,7 +547,7 @@ type PrintReportProps = {
 function PrintReport({ bankName, input, schedule, reportDate, totals, statistics, bankTotal }: PrintReportProps) {
   const repaymentMethod = input.repaymentMethod === "annuity" ? "Trả góp đều (Annuity)" : "Gốc cố định, lãi giảm dần";
   return <section className="print-report" aria-hidden="true">
-    <header className="print-header"><div><span>KẾ HOẠCH VAY</span><h1>Lịch trả nợ dự kiến</h1></div><strong>{schedule.length} kỳ thanh toán</strong></header>
+    <header className="print-header"><div><span>LPCS · LOAN PAYMENT CALCULATOR SPEC</span><h1>Lịch trả nợ dự kiến</h1></div><strong>{schedule.length} kỳ thanh toán</strong></header>
     <div className="print-meta">
       <span>Ngày lập<strong suppressHydrationWarning>{reportDate}</strong></span>
       <span>Ngân hàng<strong>{bankName.trim() || "Chưa nhập"}</strong></span>
@@ -549,6 +562,13 @@ function PrintReport({ bankName, input, schedule, reportDate, totals, statistics
       <span>Phí trả trước<strong>{formatCurrency(totals.penalty)}</strong></span>
       <span>Tổng trả ngân hàng<strong>{formatCurrency(totals.cashflow)}</strong></span>
     </div>
+    <section className="print-project-progress">
+      <div className="print-project-heading"><h2>Tiến độ thanh toán dự án</h2><span>{input.installments.length} đợt · Vốn tự có {formatCurrency(input.installments.reduce((sum, item) => sum + item.ownCapitalAmount, 0))} · Vốn ngân hàng {formatCurrency(bankTotal)}</span></div>
+      <table className="print-project-table">
+        <thead><tr><th>Đợt thanh toán</th><th>Ngày thanh toán CĐT</th><th>Giá trị đợt</th><th>Vốn tự có</th><th>Vốn ngân hàng</th><th>Ngày giải ngân</th></tr></thead>
+        <tbody>{input.installments.map((item) => <tr key={item.id}><td>{item.name || "Chưa đặt tên"}</td><td>{item.dueDate ? formatDate(item.dueDate) : "Chưa nhập"}</td><td>{formatCurrency(item.amount)}</td><td>{formatCurrency(item.ownCapitalAmount)}</td><td>{formatCurrency(item.bankCapitalAmount)}</td><td>{item.bankCapitalAmount > 0 && item.disbursementDate ? formatDate(item.disbursementDate) : "—"}</td></tr>)}</tbody>
+      </table>
+    </section>
     <div className="print-statistics">
       <span>Trả nợ cao nhất<strong>{formatCurrency(statistics.maxPayment)}</strong></span><span>Trả nợ trung bình<strong>{formatCurrency(statistics.averagePayment)}</strong></span><span>Trả nợ thấp nhất<strong>{formatCurrency(statistics.minPayment)}</strong></span>
       <span>Lãi cao nhất<strong>{formatCurrency(statistics.maxInterest)}</strong></span><span>Lãi trung bình<strong>{formatCurrency(statistics.averageInterest)}</strong></span><span>Lãi thấp nhất<strong>{formatCurrency(statistics.minInterest)}</strong></span>

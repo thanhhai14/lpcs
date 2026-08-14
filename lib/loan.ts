@@ -61,6 +61,17 @@ export type ScheduleRow = {
   segments: InterestSegment[];
 };
 
+export function paginateScheduleByYear(schedule: ScheduleRow[], monthsPerPage = 12): ScheduleRow[][] {
+  if (schedule.length === 0 || monthsPerPage <= 0) return [];
+
+  return schedule.reduce<ScheduleRow[][]>((pages, row) => {
+    const pageIndex = row.period <= 0 ? 0 : Math.floor((row.period - 1) / monthsPerPage);
+    if (!pages[pageIndex]) pages[pageIndex] = [];
+    pages[pageIndex].push(row);
+    return pages;
+  }, []);
+}
+
 type TimelineEvent = {
   date: string;
   kind: "disbursement" | "prepayment" | "rate_change";

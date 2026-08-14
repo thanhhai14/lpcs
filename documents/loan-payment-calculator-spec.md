@@ -227,8 +227,10 @@ type LoanInput = {
    - Phí phạt trả trước.
    - Tổng dòng tiền thực trả trong kỳ.
 5. Chi tiết mở rộng của từng dòng hiển thị dư nợ đầu kỳ, các lần giải ngân trong kỳ, mức lãi suất và các đoạn ngày dùng để tính lãi.
-6. Bảng các giả định và cảnh báo khi dữ liệu chưa đủ/không hợp lệ.
-7. Khả năng tải lịch trả nợ CSV/PDF là hạng mục mở rộng.
+6. Bảng tiến độ thanh toán cho chủ đầu tư, gồm giá trị từng đợt, vốn tự có, vốn ngân hàng và ngày giải ngân.
+7. Lịch trả nợ được phân trang theo từng 12 tháng vay (kỳ 1–12, 13–24...). Kỳ 0, nếu có, được ghép vào trang đầu và không chiếm chỗ của 12 tháng đầu tiên.
+8. Bảng các giả định và cảnh báo khi dữ liệu chưa đủ/không hợp lệ.
+9. Khả năng tải lịch trả nợ CSV/PDF là hạng mục mở rộng.
 
 ## 7. Tiêu chí nghiệm thu phiên bản đầu
 

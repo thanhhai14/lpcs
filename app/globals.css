@@ -1005,6 +1005,97 @@ input[type="number"] {
   color: var(--green-dark);
 }
 
+.project-payment-summary {
+  width: min(1460px, 100%);
+  margin: 0 auto 20px;
+  overflow: hidden;
+  color: #edf8f3;
+  background: rgba(255, 255, 255, .055);
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 3px;
+}
+
+.project-payment-heading {
+  min-height: 68px;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, .1);
+}
+
+.project-payment-heading > div:first-child,
+.project-funding-totals span,
+.project-payment-summary td:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.project-payment-heading > div:first-child > strong {
+  color: white;
+  font-size: 13px;
+}
+
+.project-payment-heading span,
+.project-payment-summary td small {
+  color: #9cb9b1;
+  font-size: 10px;
+}
+
+.project-funding-totals {
+  display: flex;
+  gap: 28px;
+}
+
+.project-funding-totals strong {
+  color: #edf8f3;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.project-payment-scroll {
+  overflow-x: auto;
+}
+
+.project-payment-summary table {
+  width: 100%;
+  min-width: 900px;
+  border-collapse: collapse;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.project-payment-summary th {
+  height: 38px;
+  padding: 0 14px;
+  color: #9cb9b1;
+  background: rgba(255, 255, 255, .06);
+  border-bottom: 1px solid rgba(255, 255, 255, .1);
+  font-size: 9px;
+  letter-spacing: .045em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.project-payment-summary td {
+  height: 50px;
+  padding: 7px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, .08);
+  white-space: nowrap;
+}
+
+.project-payment-summary tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.project-payment-summary td:first-child strong {
+  color: #edf8f3;
+  font-size: 11px;
+}
+
 .calculation-statistics {
   width: min(1460px, 100%);
   margin: 0 auto 20px;
@@ -1061,11 +1152,17 @@ input[type="number"] {
 .table-scroll {
   max-height: 720px;
   overflow: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.table-scroll::-webkit-scrollbar {
+  display: none;
 }
 
 .schedule-table {
   width: 100%;
-  min-width: 1240px;
+  min-width: 1160px;
   border-collapse: collapse;
   font-size: 11px;
   font-variant-numeric: tabular-nums;
@@ -1077,9 +1174,9 @@ input[type="number"] {
   position: sticky;
   top: 0;
   z-index: 3;
-  color: #66807b;
-  background: #f0f5f2;
-  border-bottom: 1px solid var(--line);
+  color: white;
+  background: var(--green);
+  border-bottom: 1px solid var(--green-dark);
   font-size: 9px;
   letter-spacing: .055em;
   text-align: left;
@@ -1091,6 +1188,19 @@ input[type="number"] {
   width: 42px;
 }
 
+.schedule-table .period-col {
+  width: 52px;
+  padding-right: 6px;
+  padding-left: 6px;
+  text-align: center;
+}
+
+.schedule-table .days-col {
+  width: 62px;
+  padding-right: 9px;
+  padding-left: 7px;
+}
+
 .schedule-table td {
   height: 55px;
   padding: 0 12px;
@@ -1098,12 +1208,20 @@ input[type="number"] {
   white-space: nowrap;
 }
 
-.schedule-table tr:not(.detail-row):hover td {
-  background: #fafcfb;
+.schedule-data-row.row-odd td {
+  background: white;
 }
 
-.schedule-table tr.expanded td {
-  background: #f6faf8;
+.schedule-data-row.row-even td {
+  background: #f4f6f5;
+}
+
+.schedule-data-row:hover td {
+  background: #edf4f0;
+}
+
+.schedule-data-row.expanded td {
+  background: #e8f1ed;
   border-bottom-color: transparent;
 }
 
@@ -1133,7 +1251,11 @@ input[type="number"] {
 }
 
 .total-col {
-  background: rgba(223, 241, 232, 0.45) !important;
+  border-left: 1px solid #dce8e2;
+}
+
+.schedule-table th.total-col {
+  background: var(--green-dark);
 }
 
 .period-pill {
@@ -1402,6 +1524,18 @@ input[type="number"] {
     flex-direction: row;
     align-items: center;
     border-right: 0;
+  }
+
+  .project-payment-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .project-funding-totals {
+    width: 100%;
+    justify-content: space-between;
+    gap: 16px;
   }
 
   .workspace,
@@ -1723,6 +1857,17 @@ input[type="number"] {
   .print-summary span { padding: 2.5mm 3mm; border-right: .6pt solid #b8c8c2; }
   .print-summary span:last-child { border-right: 0; background: #eaf3c7; }
   .print-summary strong { margin-top: .7mm; color: #10483e; font-size: 10pt; }
+  .print-project-progress { margin: 0 0 4mm; }
+  .print-project-heading { margin-bottom: 1.5mm; display: flex; align-items: baseline; justify-content: space-between; gap: 5mm; }
+  .print-project-heading h2 { margin: 0; color: #10483e; font-size: 10pt; }
+  .print-project-heading span { color: #60736f; font-size: 6.5pt; }
+  .print-project-table { width: 100%; border-collapse: collapse; font-size: 6.5pt; font-variant-numeric: tabular-nums; }
+  .print-project-table thead { display: table-header-group; }
+  .print-project-table tr { break-inside: avoid; page-break-inside: avoid; }
+  .print-project-table th { padding: 1.7mm 1.4mm; color: white; background: #1d6a57 !important; border: .4pt solid #315e55; font-size: 5.8pt; text-align: left; text-transform: uppercase; white-space: nowrap; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .print-project-table th:nth-child(n+3):not(:last-child), .print-project-table td:nth-child(n+3):not(:last-child) { text-align: right; }
+  .print-project-table td { padding: 1.4mm; border: .4pt solid #d5dfdb; white-space: nowrap; }
+  .print-project-table tbody tr:nth-child(even) td { background: #f4f7f5 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .print-statistics { margin: -1.5mm 0 4mm; display: grid; grid-template-columns: repeat(6, 1fr); border: .6pt solid #d5dfdb; }
   .print-statistics span { padding: 2mm; border-right: .4pt solid #d5dfdb; }
   .print-statistics span:last-child { border-right: 0; }
