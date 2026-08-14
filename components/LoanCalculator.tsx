@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   calculateSchedule,
   type LoanInput,
@@ -26,19 +26,41 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   return <svg aria-hidden="true" className="icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
 }
 
-function MoneyField({ id, value, onChange, describedBy }: { id: string; value: number; onChange: (value: number) => void; describedBy?: string }) {
+function MoneyField({ id, value, onChange, describedBy, hideSuffix = false }: { id: string; value: number; onChange: (value: number) => void; describedBy?: string; hideSuffix?: boolean }) {
   return (
     <div className="money-field">
       <input id={id} name={id} autoComplete="off" inputMode="numeric" value={moneyInput(value)} onChange={(event) => onChange(parseMoney(event.target.value))} aria-describedby={describedBy} />
-      <span>₫</span>
+      {!hideSuffix && <span>₫</span>}
     </div>
   );
 }
 
+function NumberField({ id, name, value, onChange, min, max, step, suffix }: { id?: string; name: string; value: number; onChange: (value: number) => void; min?: number; max?: number; step?: number; suffix?: string }) {
+  const [draft, setDraft] = useState(String(value));
+  const editing = useRef(false);
+
+  useEffect(() => {
+    if (!editing.current) setDraft(String(value));
+  }, [value]);
+
+  const commit = () => {
+    editing.current = false;
+    const parsed = draft.trim() === "" ? 0 : Number(draft);
+    const safeValue = Number.isFinite(parsed)
+      ? Math.min(max ?? Number.POSITIVE_INFINITY, Math.max(min ?? Number.NEGATIVE_INFINITY, parsed))
+      : value;
+    setDraft(String(safeValue));
+    onChange(safeValue);
+  };
+
+  return <div className="suffix-field"><input id={id} name={name} autoComplete="off" type="number" min={min} max={max} step={step} value={draft} onFocus={() => { editing.current = true; }} onChange={(event) => { const nextDraft = event.target.value; setDraft(nextDraft); if (nextDraft !== "" && Number.isFinite(Number(nextDraft))) onChange(Number(nextDraft)); }} onBlur={commit} />{suffix && <span>{suffix}</span>}</div>;
+}
+
 const initialInstallments: ProjectInstallment[] = [
-  { id: "dot-1", name: "Ký thỏa thuận", dueDate: "2026-09-15", amountMode: "percentage", percentage: 20, amount: 600_000_000, ownCapitalAmount: 600_000_000, bankCapitalAmount: 0, disbursementDate: "" },
-  { id: "dot-2", name: "Hoàn thành phần móng", dueDate: "2026-12-15", amountMode: "percentage", percentage: 40, amount: 1_200_000_000, ownCapitalAmount: 300_000_000, bankCapitalAmount: 900_000_000, disbursementDate: "2026-12-12" },
-  { id: "dot-3", name: "Bàn giao căn hộ", dueDate: "2027-06-15", amountMode: "amount", percentage: 40, amount: 1_200_000_000, ownCapitalAmount: 300_000_000, bankCapitalAmount: 900_000_000, disbursementDate: "2027-06-12" },
+  { id: "dot-1", name: "Ký HĐMB", dueDate: "2026-09-15", amountMode: "percentage", percentage: 25, amount: 750_000_000, ownCapitalAmount: 750_000_000, bankCapitalAmount: 0, disbursementDate: "" },
+  { id: "dot-2", name: "Đợt 2", dueDate: "2026-12-15", amountMode: "percentage", percentage: 45, amount: 1_350_000_000, ownCapitalAmount: 0, bankCapitalAmount: 1_350_000_000, disbursementDate: "2026-12-12" },
+  { id: "dot-3", name: "Đợt 3", dueDate: "2027-03-15", amountMode: "percentage", percentage: 25, amount: 750_000_000, ownCapitalAmount: 300_000_000, bankCapitalAmount: 450_000_000, disbursementDate: "2027-03-12" },
+  { id: "dot-4", name: "Đợt 4", dueDate: "2027-06-15", amountMode: "percentage", percentage: 5, amount: 150_000_000, ownCapitalAmount: 150_000_000, bankCapitalAmount: 0, disbursementDate: "" },
 ];
 
 const initialInput: LoanInput = {
@@ -74,7 +96,7 @@ export function LoanCalculator() {
   const [page, setPage] = useState(1);
   const validation = useMemo(() => validateLoanInput(input), [input]);
   const schedule = useMemo(() => calculateSchedule(input), [input]);
-  const pageSize = 18;
+  const pageSize = 12;
   const pageCount = Math.max(1, Math.ceil(schedule.length / pageSize));
   const currentPage = Math.min(page, pageCount);
   const visibleSchedule = schedule.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -204,19 +226,19 @@ export function LoanCalculator() {
             <label className="field"><span>Giá trị dự án</span><MoneyField id="project-value" value={input.projectValue} onChange={updateProjectValue} /><small>Tổng nghĩa vụ thanh toán với chủ đầu tư.</small></label>
             <label className="field"><span>Hạn mức ngân hàng cho vay</span><MoneyField id="facility-amount" value={input.facilityAmount} onChange={(facilityAmount) => setInput({ ...input, facilityAmount })} /><small>Còn có thể phân bổ {formatCurrency(validation.remainingFacility)}.</small></label>
             <label className="field"><span>Ngân hàng</span><input name="bank-name" autoComplete="off" placeholder="Ví dụ: Vietcombank…" defaultValue="Ngân hàng dự kiến" /></label>
-            <label className="field"><span>Thời hạn vay</span><div className="suffix-field"><input name="loan-term" autoComplete="off" type="number" min="1" max="480" value={input.termMonths} onChange={(event) => setInput({ ...input, termMonths: Number(event.target.value) })} /><span>tháng</span></div></label>
-            <label className="field"><span>Ngày trả nợ hàng tháng</span><div className="suffix-field"><input name="payment-day" autoComplete="off" type="number" min="1" max="31" value={input.paymentDay} onChange={(event) => setInput({ ...input, paymentDay: Math.min(31, Math.max(1, Number(event.target.value))) })} /><span>hàng tháng</span></div></label>
+            <label className="field"><span>Thời hạn vay</span><NumberField name="loan-term" value={input.termMonths} min={1} max={480} onChange={(termMonths) => setInput({ ...input, termMonths })} suffix="tháng" /></label>
+            <label className="field"><span>Ngày trả nợ hàng tháng</span><NumberField name="payment-day" value={input.paymentDay} min={1} max={31} onChange={(paymentDay) => setInput({ ...input, paymentDay: Math.min(31, Math.max(1, paymentDay)) })} suffix="hàng tháng" /></label>
             <label className="field"><span>Phương thức trả nợ</span><select name="repayment-method" autoComplete="off" value={input.repaymentMethod} onChange={(event) => setInput({ ...input, repaymentMethod: event.target.value as LoanInput["repaymentMethod"] })}><option value="equal_principal">Gốc đều, lãi giảm dần</option><option value="annuity">Tổng trả gần đều (annuity)</option><option value="interest_only">Chỉ trả lãi khi đang giải ngân</option></select></label>
-            <label className="field"><span>Ân hạn gốc</span><div className="suffix-field"><input name="grace-months" autoComplete="off" type="number" min="0" max={input.termMonths - 1} value={input.principalGraceMonths} onChange={(event) => setInput({ ...input, principalGraceMonths: Number(event.target.value) })} /><span>tháng</span></div></label>
+            <label className="field"><span>Ân hạn gốc</span><NumberField name="grace-months" value={input.principalGraceMonths} min={0} max={Math.max(0, input.termMonths - 1)} onChange={(principalGraceMonths) => setInput({ ...input, principalGraceMonths })} suffix="tháng" /></label>
           </div>
         </section>
 
         <aside className="panel rate-panel" aria-labelledby="rate-title">
           <div className="section-heading compact"><div><span className="section-kicker">02 / Lãi suất</span><h2 id="rate-title">Điều kiện ngân hàng</h2></div></div>
           <div className="rate-grid">
-            <label className="field"><span>Lãi suất ưu đãi</span><div className="suffix-field"><input name="promotional-rate" autoComplete="off" type="number" min="0" step="0.1" value={input.promotionalRate} onChange={(event) => setInput({ ...input, promotionalRate: Number(event.target.value) })} /><span>%/năm</span></div></label>
-            <label className="field"><span>Thời gian ưu đãi</span><div className="suffix-field"><input name="promotional-months" autoComplete="off" type="number" min="0" value={input.promotionalMonths} onChange={(event) => setInput({ ...input, promotionalMonths: Number(event.target.value) })} /><span>tháng</span></div></label>
-            <label className="field"><span>Lãi sau ưu đãi</span><div className="suffix-field"><input name="post-promotional-rate" autoComplete="off" type="number" min="0" step="0.1" value={input.postPromotionalRate} onChange={(event) => setInput({ ...input, postPromotionalRate: Number(event.target.value) })} /><span>%/năm</span></div></label>
+            <label className="field"><span>Lãi suất ưu đãi</span><NumberField name="promotional-rate" value={input.promotionalRate} min={0} step={0.1} onChange={(promotionalRate) => setInput({ ...input, promotionalRate })} suffix="%/năm" /></label>
+            <label className="field"><span>Thời gian ưu đãi</span><NumberField name="promotional-months" value={input.promotionalMonths} min={0} onChange={(promotionalMonths) => setInput({ ...input, promotionalMonths })} suffix="tháng" /></label>
+            <label className="field"><span>Lãi sau ưu đãi</span><NumberField name="post-promotional-rate" value={input.postPromotionalRate} min={0} step={0.1} onChange={(postPromotionalRate) => setInput({ ...input, postPromotionalRate })} suffix="%/năm" /><small>Mức lãi dự kiến, có thể thay đổi theo chính sách ngân hàng.</small></label>
           </div>
           <div className="formula-note"><Icon name="info" size={16} /><span>Lãi tính trên dư nợ thực tế theo số ngày, quy ước Actual/365.</span></div>
         </aside>
@@ -252,8 +274,8 @@ export function LoanCalculator() {
                       <label htmlFor={`amount-${item.id}`}>Giá trị đợt</label>
                       <div className="amount-entry">
                         {amountMode === "percentage"
-                          ? <div className="suffix-field"><input id={`amount-${item.id}`} name={`amount-${item.id}`} autoComplete="off" type="number" min="0" max="100" step="0.1" value={item.percentage ?? 0} onChange={(event) => updateInstallmentPercentage(item, Number(event.target.value))} /><span>%</span></div>
-                          : <MoneyField id={`amount-${item.id}`} value={item.amount} onChange={(amount) => updateInstallmentAmount(item, amount)} />}
+                          ? <NumberField id={`amount-${item.id}`} name={`amount-${item.id}`} value={item.percentage ?? 0} min={0} max={100} step={0.1} onChange={(percentage) => updateInstallmentPercentage(item, percentage)} />
+                          : <MoneyField id={`amount-${item.id}`} value={item.amount} onChange={(amount) => updateInstallmentAmount(item, amount)} hideSuffix />}
                         <div className="amount-mode-switch" role="group" aria-label={`Cách nhập giá trị ${item.name}`}>
                           <button type="button" className={amountMode === "percentage" ? "active" : ""} onClick={() => setInstallmentAmountMode(item, "percentage")}>%</button>
                           <button type="button" className={amountMode === "amount" ? "active" : ""} onClick={() => setInstallmentAmountMode(item, "amount")}>VNĐ</button>
@@ -269,7 +291,7 @@ export function LoanCalculator() {
                     <button type="button" className={mode === "mixed" ? "active" : ""} onClick={() => setFundingMode(item, "mixed")}>Kết hợp</button>
                   </div>
                   {mode !== "own" && <div className="funding-details">
-                    {mode === "mixed" && <div className="field"><span>Vốn tự có (tự tính)</span><output className="calculated-value">{formatCurrency(item.ownCapitalAmount)}</output></div>}
+                    {mode === "mixed" && <div className="field"><span>Vốn tự có (tự tính)</span><output className="calculated-value">{formatCurrency(item.ownCapitalAmount)}</output><small>Tự tính sau khi nhập số tiền ngân hàng giải ngân.</small></div>}
                     <div className="field bank-allocation-field">
                       <label htmlFor={`bank-${item.id}`}>Ngân hàng giải ngân</label>
                       <MoneyField id={`bank-${item.id}`} value={item.bankCapitalAmount} onChange={(bankCapitalAmount) => updateBankCapital(item, bankCapitalAmount)} />
@@ -301,7 +323,7 @@ export function LoanCalculator() {
             </div>)}
           </div>
           <div className="prepayment-settings">
-            <label className="field"><span>Phí phạt trả trước</span><div className="suffix-field"><input name="prepayment-penalty-rate" autoComplete="off" type="number" min="0" step="0.1" value={input.prepaymentPenaltyRate} onChange={(event) => setInput({ ...input, prepaymentPenaltyRate: Number(event.target.value) })} /><span>% số tiền</span></div></label>
+            <label className="field"><span>Phí phạt trả trước</span><NumberField name="prepayment-penalty-rate" value={input.prepaymentPenaltyRate} min={0} step={0.1} onChange={(prepaymentPenaltyRate) => setInput({ ...input, prepaymentPenaltyRate })} suffix="% số tiền" /></label>
             <fieldset><legend>Sau khi trả trước</legend><label><input type="radio" name="prepayment-effect" checked={input.prepaymentEffect === "reduce_term"} onChange={() => setInput({ ...input, prepaymentEffect: "reduce_term" })} /><span><strong>Rút ngắn kỳ hạn</strong><small>Giữ gần nguyên phần gốc định kỳ</small></span></label><label><input type="radio" name="prepayment-effect" checked={input.prepaymentEffect === "reduce_payment"} onChange={() => setInput({ ...input, prepaymentEffect: "reduce_payment" })} /><span><strong>Giảm khoản trả</strong><small>Giữ nguyên ngày đáo hạn</small></span></label></fieldset>
           </div>
         </div>
