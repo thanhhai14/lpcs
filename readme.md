@@ -12,6 +12,7 @@
 - Lãi suất ưu đãi và sau ưu đãi, tính theo ngày Actual/365.
 - Lập kế hoạch trả trước, tính phí phạt, giảm kỳ hạn hoặc giảm khoản trả.
 - Lịch trả nợ dạng bảng trên desktop và dạng list card trên mobile.
+- Xuất toàn bộ lịch trả nợ thành tệp Excel hai sheet và in báo cáo A4 ngang.
 
 ## Chạy cục bộ
 

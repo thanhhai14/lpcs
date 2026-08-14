@@ -8,9 +8,10 @@ import {
   type ProjectInstallment,
   validateLoanInput,
 } from "@/lib/loan";
+import { exportLoanWorkbook } from "@/lib/exportExcel";
 import { formatCompactCurrency, formatCurrency, formatDate, moneyInput, parseMoney } from "@/lib/format";
 
-type IconName = "arrow" | "bank" | "calendar" | "chevron" | "info" | "plus" | "trash" | "wallet";
+type IconName = "arrow" | "bank" | "calendar" | "chevron" | "download" | "info" | "plus" | "printer" | "trash" | "wallet";
 
 function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, React.ReactNode> = {
@@ -18,8 +19,10 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
     bank: <><path d="m3 10 9-6 9 6" /><path d="M5 10v8M9 10v8M15 10v8M19 10v8M3 21h18" /></>,
     calendar: <><path d="M6 2v3M18 2v3M3 8h18" /><rect x="3" y="4" width="18" height="18" rx="2" /></>,
     chevron: <path d="m9 18 6-6-6-6" />,
+    download: <><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></>,
     info: <><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></>,
     plus: <><path d="M12 5v14M5 12h14" /></>,
+    printer: <><path d="M6 9V3h12v6" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="7" /></>,
     trash: <><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6" /></>,
     wallet: <><path d="M4 6h14a2 2 0 0 1 2 2v11H4a2 2 0 0 1-2-2V6a3 3 0 0 1 3-3h12v3" /><path d="M15 12h5M15 12v4h5" /></>,
   };
@@ -92,8 +95,11 @@ function resizeInstallment(item: ProjectInstallment, amount: number): ProjectIns
 
 export function LoanCalculator() {
   const [input, setInput] = useState<LoanInput>(initialInput);
+  const [bankName, setBankName] = useState("Ngân hàng dự kiến");
   const [expandedPeriod, setExpandedPeriod] = useState<number | null>(1);
   const [page, setPage] = useState(1);
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportError, setExportError] = useState("");
   const validation = useMemo(() => validateLoanInput(input), [input]);
   const schedule = useMemo(() => calculateSchedule(input), [input]);
   const pageSize = 12;
@@ -104,6 +110,22 @@ export function LoanCalculator() {
     () => schedule.reduce((result, row) => ({ interest: result.interest + row.interest, penalty: result.penalty + row.prepaymentPenalty, cashflow: result.cashflow + row.totalCashflow }), { interest: 0, penalty: 0, cashflow: 0 }),
     [schedule],
   );
+  const reportReady = schedule.length > 0 && validation.errors.length === 0;
+  const reportDate = new Intl.DateTimeFormat("vi-VN", { dateStyle: "long", timeZone: "Asia/Ho_Chi_Minh" }).format(new Date());
+
+  const handleExportExcel = async () => {
+    if (!reportReady || isExporting) return;
+    setIsExporting(true);
+    setExportError("");
+    try {
+      await exportLoanWorkbook({ bankName, input, schedule });
+    } catch (error) {
+      console.error(error);
+      setExportError("Không thể tạo tệp Excel. Vui lòng thử lại.");
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const updateInstallment = (id: string, patch: Partial<ProjectInstallment>) => {
     setInput((current) => ({ ...current, installments: current.installments.map((item) => item.id === id ? { ...item, ...patch } : item) }));
@@ -225,7 +247,7 @@ export function LoanCalculator() {
           <div className="form-grid">
             <label className="field"><span>Giá trị dự án</span><MoneyField id="project-value" value={input.projectValue} onChange={updateProjectValue} /><small>Tổng nghĩa vụ thanh toán với chủ đầu tư.</small></label>
             <label className="field"><span>Hạn mức ngân hàng cho vay</span><MoneyField id="facility-amount" value={input.facilityAmount} onChange={(facilityAmount) => setInput({ ...input, facilityAmount })} /><small>Còn có thể phân bổ {formatCurrency(validation.remainingFacility)}.</small></label>
-            <label className="field"><span>Ngân hàng</span><input name="bank-name" autoComplete="off" placeholder="Ví dụ: Vietcombank…" defaultValue="Ngân hàng dự kiến" /></label>
+            <label className="field"><span>Ngân hàng</span><input name="bank-name" autoComplete="off" placeholder="Ví dụ: Vietcombank…" value={bankName} onChange={(event) => setBankName(event.target.value)} /></label>
             <label className="field"><span>Thời hạn vay</span><NumberField name="loan-term" value={input.termMonths} min={1} max={480} onChange={(termMonths) => setInput({ ...input, termMonths })} suffix="tháng" /></label>
             <label className="field"><span>Ngày trả nợ hàng tháng</span><NumberField name="payment-day" value={input.paymentDay} min={1} max={31} onChange={(paymentDay) => setInput({ ...input, paymentDay: Math.min(31, Math.max(1, paymentDay)) })} suffix="hàng tháng" /></label>
             <label className="field"><span>Phương thức trả nợ</span><select name="repayment-method" autoComplete="off" value={input.repaymentMethod} onChange={(event) => setInput({ ...input, repaymentMethod: event.target.value as LoanInput["repaymentMethod"] })}><option value="equal_principal">Gốc cố định, lãi giảm dần</option><option value="annuity">Trả góp đều (Annuity)</option></select><small>Gốc cố định: phần gốc đều, tổng trả giảm dần. Annuity: tổng trả gần đều.</small></label>
@@ -332,7 +354,14 @@ export function LoanCalculator() {
       <section className="results-section" aria-labelledby="schedule-title">
         <div className="results-heading">
           <div><span className="section-kicker light">05 / Kết quả mô phỏng</span><h2 id="schedule-title">Lịch trả nợ dự kiến</h2><p>Cập nhật tức thì theo kế hoạch ở trên.</p></div>
-          <div className="result-stamp"><span>{schedule.length}</span> kỳ thanh toán</div>
+          <div className="result-actions">
+            <div className="result-stamp"><span>{schedule.length}</span> kỳ thanh toán</div>
+            <div className="result-buttons">
+              <button className="button result-action" type="button" disabled={!reportReady || isExporting} onClick={handleExportExcel}><Icon name="download" size={16} /> {isExporting ? "Đang tạo…" : "Xuất Excel"}</button>
+              <button className="button result-action" type="button" disabled={!reportReady} onClick={() => window.print()}><Icon name="printer" size={16} /> In lịch trả nợ</button>
+            </div>
+            {exportError && <p className="export-error" role="alert">{exportError}</p>}
+          </div>
         </div>
         <div className="summary-strip">
           <div><span>Tổng vốn vay</span><strong>{formatCurrency(validation.bankTotal)}</strong></div>
@@ -355,6 +384,7 @@ export function LoanCalculator() {
         </div>
         <p className="disclaimer"><Icon name="info" size={15} /> Kết quả mang tính tham khảo. Số liệu thực tế phụ thuộc quy tắc làm tròn, ngày hạch toán và điều khoản của ngân hàng.</p>
       </section>
+      <PrintReport bankName={bankName} input={input} schedule={schedule} reportDate={reportDate} totals={totals} bankTotal={validation.bankTotal} />
       </main>
     </>
   );
@@ -372,4 +402,39 @@ function ScheduleTableRows({ row, expanded, onToggle }: RowProps) {
 
 function ScheduleCard({ row, expanded, onToggle }: RowProps) {
   return <article className={`schedule-card ${expanded ? "expanded" : ""}`}><button className="schedule-card-main" type="button" onClick={onToggle} aria-expanded={expanded}><span className="period-pill">Kỳ {row.period}</span><span className="card-date">{formatDate(row.dueDate)} · {row.days} ngày</span><span className="card-total"><small>Tổng thực trả</small><strong>{formatCurrency(row.totalCashflow)}</strong></span><span className="card-chevron"><Icon name="chevron" size={16} /></span><span className="card-balance">Còn lại <strong>{formatCurrency(row.closingBalance)}</strong></span></button>{expanded && <div className="schedule-card-detail"><div className="card-grid"><span>Gốc<strong>{formatCurrency(row.principal)}</strong></span><span>Lãi<strong>{formatCurrency(row.interest)}</strong></span><span>Trả trước<strong>{row.prepayment ? formatCurrency(row.prepayment) : "—"}</strong></span><span>Phí phạt<strong>{row.prepaymentPenalty ? formatCurrency(row.prepaymentPenalty) : "—"}</strong></span></div><SegmentDetails row={row} /></div>}</article>;
+}
+
+type PrintReportProps = {
+  bankName: string;
+  input: LoanInput;
+  schedule: ReturnType<typeof calculateSchedule>;
+  reportDate: string;
+  totals: { interest: number; penalty: number; cashflow: number };
+  bankTotal: number;
+};
+
+function PrintReport({ bankName, input, schedule, reportDate, totals, bankTotal }: PrintReportProps) {
+  const repaymentMethod = input.repaymentMethod === "annuity" ? "Trả góp đều (Annuity)" : "Gốc cố định, lãi giảm dần";
+  return <section className="print-report" aria-hidden="true">
+    <header className="print-header"><div><span>KẾ HOẠCH VAY</span><h1>Lịch trả nợ dự kiến</h1></div><strong>{schedule.length} kỳ thanh toán</strong></header>
+    <div className="print-meta">
+      <span>Ngày lập<strong suppressHydrationWarning>{reportDate}</strong></span>
+      <span>Ngân hàng<strong>{bankName.trim() || "Chưa nhập"}</strong></span>
+      <span>Phương thức<strong>{repaymentMethod}</strong></span>
+      <span>Thời hạn<strong>{input.termMonths} tháng</strong></span>
+      <span>Lãi suất<strong>{input.promotionalRate}%/{input.promotionalMonths} tháng; sau đó dự kiến {input.postPromotionalRate}%</strong></span>
+      <span>Quy ước tính lãi<strong>Actual/365 · Trả ngày {input.paymentDay} hàng tháng</strong></span>
+    </div>
+    <div className="print-summary">
+      <span>Tổng vốn vay<strong>{formatCurrency(bankTotal)}</strong></span>
+      <span>Tổng lãi dự kiến<strong>{formatCurrency(totals.interest)}</strong></span>
+      <span>Phí trả trước<strong>{formatCurrency(totals.penalty)}</strong></span>
+      <span>Tổng trả ngân hàng<strong>{formatCurrency(totals.cashflow)}</strong></span>
+    </div>
+    <table className="print-table">
+      <thead><tr><th>Kỳ</th><th>Ngày</th><th>Số ngày</th><th>Giải ngân</th><th>Gốc</th><th>Lãi</th><th>Trả trước</th><th>Phí</th><th>Tổng thực trả</th><th>Dư nợ cuối kỳ</th></tr></thead>
+      <tbody>{schedule.map((row) => <tr key={row.period}><td>{row.period}</td><td>{formatDate(row.dueDate)}</td><td>{row.days}</td><td>{row.disbursed ? formatCurrency(row.disbursed) : "—"}</td><td>{formatCurrency(row.principal)}</td><td>{formatCurrency(row.interest)}</td><td>{row.prepayment ? formatCurrency(row.prepayment) : "—"}</td><td>{row.prepaymentPenalty ? formatCurrency(row.prepaymentPenalty) : "—"}</td><td><strong>{formatCurrency(row.totalCashflow)}</strong></td><td>{formatCurrency(row.closingBalance)}</td></tr>)}</tbody>
+    </table>
+    <footer className="print-footer">Kết quả mang tính tham khảo. Số liệu thực tế phụ thuộc ngày hạch toán, quy tắc làm tròn và điều khoản của ngân hàng.</footer>
+  </section>;
 }
