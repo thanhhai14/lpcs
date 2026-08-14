@@ -7,7 +7,8 @@
 - Nhập giá trị dự án và các đợt thanh toán cho chủ đầu tư.
 - Phân bổ từng đợt bằng vốn tự có, vốn ngân hàng hoặc kết hợp.
 - Giải ngân một hoặc nhiều lần theo ngày dự kiến.
-- Tính gốc đều, annuity hoặc chỉ trả lãi trong giai đoạn giải ngân.
+- Hai phương thức trả nợ: gốc cố định, lãi giảm dần hoặc trả góp đều (annuity).
+- Với nhiều lần giải ngân, phần gốc được lập lại theo dư nợ thực tế và số kỳ còn lại.
 - Lãi suất ưu đãi và sau ưu đãi, tính theo ngày Actual/365.
 - Lập kế hoạch trả trước, tính phí phạt, giảm kỳ hạn hoặc giảm khoản trả.
 - Lịch trả nợ dạng bảng trên desktop và dạng list card trên mobile.

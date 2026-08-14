@@ -1,4 +1,4 @@
-export type RepaymentMethod = "equal_principal" | "annuity" | "interest_only";
+export type RepaymentMethod = "equal_principal" | "annuity";
 export type PrepaymentEffect = "reduce_payment" | "reduce_term";
 
 export type ProjectInstallment = {
@@ -127,7 +127,6 @@ export function calculateSchedule(input: LoanInput): ScheduleRow[] {
   if (!disbursements.length || input.termMonths <= 0) return [];
 
   const startDate = disbursements.map((item) => item.date).sort()[0];
-  const lastDisbursementDate = disbursements.map((item) => item.date).sort().at(-1) ?? startDate;
   const firstDue = firstDueDate(startDate, input.paymentDay);
   const promotionEnd = addMonths(startDate, input.promotionalMonths);
   const events: TimelineEvent[] = [
@@ -140,17 +139,17 @@ export function calculateSchedule(input: LoanInput): ScheduleRow[] {
   if (input.promotionalMonths > 0) events.push({ date: promotionEnd, kind: "rate_change" });
   events.sort((a, b) => a.date.localeCompare(b.date));
 
-  const totalPlannedLoan = disbursements.reduce((sum, item) => sum + item.amount, 0);
-  const regularPrincipalTarget = totalPlannedLoan / Math.max(1, input.termMonths - input.principalGraceMonths);
   const rows: ScheduleRow[] = [];
   let balance = 0;
+  let displayedBalance = 0;
   let previousDue = startDate;
+  let lockedEqualPrincipal = 0;
   let lockedAnnuityPayment = 0;
   let eventIndex = 0;
 
   for (let period = 1; period <= input.termMonths && (balance > 0.5 || eventIndex < events.length); period += 1) {
     const dueDate = addMonths(firstDue, period - 1);
-    const openingBalance = balance;
+    const openingBalance = displayedBalance;
     const periodEvents: TimelineEvent[] = [];
 
     while (eventIndex < events.length && events[eventIndex].date < dueDate) {
@@ -183,13 +182,19 @@ export function calculateSchedule(input: LoanInput): ScheduleRow[] {
       if (event.kind === "disbursement") {
         balance += event.amount ?? 0;
         disbursed += event.amount ?? 0;
-        if (input.repaymentMethod === "annuity") lockedAnnuityPayment = 0;
+        lockedEqualPrincipal = 0;
+        lockedAnnuityPayment = 0;
       } else if (event.kind === "prepayment") {
         const paid = Math.min(balance, event.amount ?? 0);
         balance -= paid;
         prepayment += paid;
         prepaymentPenalty += paid * (input.prepaymentPenaltyRate / 100);
-        if (input.prepaymentEffect === "reduce_payment") lockedAnnuityPayment = 0;
+        if (input.prepaymentEffect === "reduce_payment") {
+          lockedEqualPrincipal = 0;
+          lockedAnnuityPayment = 0;
+        }
+      } else if (event.kind === "rate_change") {
+        lockedAnnuityPayment = 0;
       }
       cursor = event.date;
     }
@@ -205,24 +210,25 @@ export function calculateSchedule(input: LoanInput): ScheduleRow[] {
     for (const event of dueEvents.filter((item) => item.kind === "disbursement")) {
       balance += event.amount ?? 0;
       disbursed += event.amount ?? 0;
-      if (input.repaymentMethod === "annuity") lockedAnnuityPayment = 0;
+      lockedEqualPrincipal = 0;
+      lockedAnnuityPayment = 0;
     }
 
     const graceFinished = period > input.principalGraceMonths;
-    const allFundsDrawn = dueDate > lastDisbursementDate;
     const remainingPeriods = Math.max(1, input.termMonths - period + 1);
     let principal = 0;
 
-    if (graceFinished && balance > 0 && (input.repaymentMethod !== "interest_only" || allFundsDrawn)) {
+    if (graceFinished && balance > 0) {
       if (input.repaymentMethod === "annuity") {
         if (!lockedAnnuityPayment || input.prepaymentEffect === "reduce_payment") {
           lockedAnnuityPayment = annuityPayment(balance, rateAt(dueDate, startDate, input), remainingPeriods);
         }
         principal = Math.min(balance, Math.max(0, lockedAnnuityPayment - interest));
-      } else if (input.prepaymentEffect === "reduce_term") {
-        principal = Math.min(balance, regularPrincipalTarget);
       } else {
-        principal = Math.min(balance, balance / remainingPeriods);
+        if (!lockedEqualPrincipal || input.prepaymentEffect === "reduce_payment") {
+          lockedEqualPrincipal = balance / remainingPeriods;
+        }
+        principal = Math.min(balance, lockedEqualPrincipal);
       }
     }
 
@@ -233,27 +239,38 @@ export function calculateSchedule(input: LoanInput): ScheduleRow[] {
       balance -= paid;
       prepayment += paid;
       prepaymentPenalty += paid * (input.prepaymentPenaltyRate / 100);
-      if (input.prepaymentEffect === "reduce_payment") lockedAnnuityPayment = 0;
+      if (input.prepaymentEffect === "reduce_payment") {
+        lockedEqualPrincipal = 0;
+        lockedAnnuityPayment = 0;
+      }
     }
 
-    const roundedPrincipal = Math.round(principal);
+    let roundedPrincipal = Math.round(principal);
     const roundedInterest = Math.round(interest);
     const roundedPrepayment = Math.round(prepayment);
     const roundedPenalty = Math.round(prepaymentPenalty);
+    const roundedDisbursed = Math.round(disbursed);
+
+    // Keep the displayed ledger exact to the đồng. On a payoff row, absorb all
+    // accumulated fractional rounding into the last principal installment.
+    if (balance < 0.5) {
+      roundedPrincipal = Math.max(0, openingBalance + roundedDisbursed - roundedPrepayment);
+    }
+    displayedBalance = Math.max(0, openingBalance + roundedDisbursed - roundedPrincipal - roundedPrepayment);
 
     rows.push({
       period,
       dueDate,
       days: daysBetween(previousDue, dueDate),
       openingBalance: Math.round(openingBalance),
-      disbursed: Math.round(disbursed),
+      disbursed: roundedDisbursed,
       principal: roundedPrincipal,
       interest: roundedInterest,
       scheduledPayment: roundedPrincipal + roundedInterest,
       prepayment: roundedPrepayment,
       prepaymentPenalty: roundedPenalty,
       totalCashflow: roundedPrincipal + roundedInterest + roundedPrepayment + roundedPenalty,
-      closingBalance: Math.max(0, Math.round(balance)),
+      closingBalance: displayedBalance,
       segments,
     });
 

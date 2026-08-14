@@ -55,6 +55,36 @@ test("đợt giải ngân sau chỉ phát sinh lãi từ ngày giải ngân", ()
   assert.ok(rows[1].segments.some((segment) => segment.from === "2026-02-10"));
 });
 
+test("gốc cố định được tính từ số tiền thực tế đã giải ngân", () => {
+  const actualDisbursement = 480_930_345;
+  const rows = calculateSchedule(input({
+    projectValue: 600_000_000,
+    facilityAmount: 600_000_000,
+    installments: [
+      { id: "one", name: "Đợt 1", dueDate: "2026-01-01", amount: actualDisbursement, ownCapitalAmount: 0, bankCapitalAmount: actualDisbursement, disbursementDate: "2026-01-01" },
+    ],
+  }));
+
+  assert.equal(rows[0].principal, Math.round(actualDisbursement / 12));
+  assert.notEqual(rows[0].principal, 50_000_000);
+});
+
+test("annuity trả hết đúng phần vốn đã giải ngân", () => {
+  const actualDisbursement = 480_930_345;
+  const rows = calculateSchedule(input({
+    projectValue: 600_000_000,
+    facilityAmount: 600_000_000,
+    repaymentMethod: "annuity",
+    installments: [
+      { id: "one", name: "Đợt 1", dueDate: "2026-01-01", amount: actualDisbursement, ownCapitalAmount: 0, bankCapitalAmount: actualDisbursement, disbursementDate: "2026-01-01" },
+    ],
+  }));
+  const totalPrincipal = rows.reduce((sum, row) => sum + row.principal, 0);
+
+  assert.equal(totalPrincipal, actualDisbursement);
+  assert.equal(rows.at(-1)?.closingBalance, 0);
+});
+
 test("trả trước giảm dư nợ và phí không được trừ vào gốc", () => {
   const rows = calculateSchedule(input({
     prepayments: [{ id: "prepay", date: "2026-03-15", amount: 20_000_000 }],

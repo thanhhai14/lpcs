@@ -102,7 +102,7 @@ Khi có nhiều đợt giải ngân, từng đợt chỉ bắt đầu chịu lã
 
 Nếu trong một kỳ có đổi lãi suất hoặc giải ngân, kỳ đó được tách thành các đoạn nhỏ; lãi kỳ là tổng lãi của từng đoạn. Cách này phản ánh gần nhất cách tính theo dư nợ thực tế của ngân hàng.
 
-### 3.2. Trả gốc đều trên dư nợ giảm dần
+### 3.2. Gốc cố định, lãi giảm dần
 
 Sau khi hết ân hạn, gốc kế hoạch được phân bổ đều theo số kỳ còn lại:
 
@@ -126,15 +126,9 @@ Trong đó `P` là dư nợ tại lúc lập lịch, `r` là lãi suất mỗi k
 
 Nếu lãi suất đổi hoặc có giải ngân thêm, hệ thống sẽ **tái lập khoản góp từ kỳ kế tiếp** trên dư nợ hiện tại và số kỳ còn lại. Đây là quy ước cần xác nhận, vì từng ngân hàng có thể giữ nguyên số tiền góp hoặc thay đổi số tiền góp/kỳ hạn.
 
-### 3.4. Giải ngân nhiều lần — các mô hình cần chọn
+### 3.4. Giải ngân nhiều lần
 
-| Mô hình | Cách hoạt động | Phù hợp khi |
-| --- | --- | --- |
-| Một lịch chung | Mọi đợt cộng vào dư nợ chung; trả theo ngày đáo hạn chung của hợp đồng. | Vay xây sửa nhà, hạn mức có kỳ hạn chung. |
-| Lịch riêng từng đợt | Mỗi đợt có kỳ hạn và lịch trả độc lập; tổng phải trả là tổng các lịch. | Mỗi lần rút vốn tạo một khoản vay con. |
-| Chỉ trả lãi trước khi giải ngân đủ | Trong giai đoạn rút vốn, trả lãi trên số đã rút; gốc bắt đầu trả từ một mốc đã quy định. | Dự án xây dựng, giải ngân theo tiến độ. |
-
-Phiên bản đầu tiên nên cho người dùng chọn một trong ba mô hình trên. Mô hình mặc định đề xuất là **một lịch chung**, do dễ hiểu và phù hợp với phần lớn nhu cầu mô phỏng tiến độ giải ngân.
+Phiên bản đầu dùng một lịch trả nợ chung. Mỗi đợt giải ngân được cộng vào dư nợ đúng ngày thực tế; từ kỳ kế tiếp, phần gốc hoặc khoản trả annuity được tái lập trên dư nợ hiện có và số kỳ còn lại. Hạn mức chưa giải ngân không được dùng để tính gốc hoặc lãi.
 
 ### 3.5. Trả trước hạn
 
@@ -200,8 +194,7 @@ type LoanInput = {
   bankName?: string;
   facilityAmount?: number;
   disbursements: Disbursement[];
-  repaymentModel: 'declining_balance' | 'annuity';
-  multiDisbursementModel: 'shared_schedule' | 'per_drawdown' | 'interest_only_until_drawdown_complete';
+  repaymentModel: 'equal_principal' | 'annuity';
   termMonths: number;
   paymentDay: number;
   principalGraceMonths: number;
@@ -248,7 +241,7 @@ type LoanInput = {
 
 1. Loại khoản vay mục tiêu đầu tiên (mua nhà, xây sửa nhà, kinh doanh, hoặc khác).
 2. Các trường đầu vào bắt buộc và công thức/lịch lãi suất ngân hàng thực tế bạn muốn mô phỏng.
-3. Cách tính gốc khi có nhiều đợt giải ngân: một lịch chung, lịch riêng từng đợt, hay chỉ trả lãi trong giai đoạn giải ngân.
-4. Phương thức trả nợ cần ưu tiên: dư nợ giảm dần, trả góp đều, hay cả hai.
+3. Các điều khoản ân hạn gốc cụ thể cần mô phỏng ngoài số tháng ân hạn.
+4. Hai phương thức trả nợ áp dụng: gốc cố định, lãi giảm dần và trả góp đều (annuity).
 5. Quy ước lãi (Actual/365, Actual/360, 30/360), ngày trả nợ, ân hạn, phí và xử lý khi rơi vào ngày nghỉ.
 6. Yêu cầu thương hiệu/giao diện hoặc ví dụ website tham khảo.

@@ -47,19 +47,13 @@ Lịch trả nợ được tạo từ các sự kiện giải ngân, thay đổi
 
 ### Chế độ A — Giải ngân một lần
 
-Toàn bộ khoản vay được giải ngân vào một ngày. Đây là chế độ đơn giản nhất và dùng được với trả gốc đều, annuity, chỉ trả lãi hoặc trả gốc cuối kỳ.
+Toàn bộ khoản vay được giải ngân vào một ngày. Chế độ này dùng được với cả gốc cố định, lãi giảm dần và annuity.
 
 ### Chế độ B — Nhiều giải ngân, một lịch trả nợ chung
 
 Các đợt giải ngân cộng vào một dư nợ chung. Ngày đáo hạn chung không đổi.
 
-Khi giải ngân mới, cách tái lập lịch gốc có ba lựa chọn:
-
-1. Tăng số tiền trả, giữ ngày đáo hạn.
-2. Giữ gần nguyên số tiền trả, kéo dài kỳ hạn nếu hợp đồng cho phép.
-3. Chỉ thu lãi trong giai đoạn giải ngân; bắt đầu trả gốc từ ngày chốt giải ngân.
-
-Chế độ đề xuất cho phiên bản đầu: tăng số tiền trả và giữ ngày đáo hạn; đồng thời hỗ trợ tuỳ chọn chỉ trả lãi trong giai đoạn giải ngân.
+Khi có giải ngân mới, ứng dụng tái lập phần gốc hoặc khoản trả annuity trên dư nợ thực tế và số kỳ còn lại, đồng thời giữ nguyên ngày đáo hạn. Hạn mức chưa giải ngân không tham gia tính lịch trả nợ.
 
 ### Chế độ C — Nhiều giải ngân, lịch riêng từng đợt
 
@@ -69,13 +63,10 @@ Mỗi lần giải ngân là một khoản vay con, có kỳ hạn và lịch tr
 
 | Chế độ | Gốc định kỳ | Đặc điểm |
 | --- | --- | --- |
-| Gốc đều | Gốc còn lại / số kỳ còn lại | Tổng tiền trả giảm dần. |
+| Gốc cố định, lãi giảm dần | Gốc còn lại / số kỳ còn lại tại lúc lập lịch | Tổng tiền trả giảm dần. |
 | Annuity | Tổng gốc + lãi gần bằng nhau | Cần tái tính khi lãi suất hoặc dư nợ thay đổi. |
-| Chỉ trả lãi | 0 trong giai đoạn chỉ trả lãi | Gốc được trả sau ân hạn hoặc cuối kỳ. |
-| Gốc cuối kỳ (bullet) | 0 trước ngày đáo hạn | Rủi ro dòng tiền lớn ở kỳ cuối; cần cảnh báo rõ. |
-| Lịch gốc tùy chỉnh | Theo số tiền/tỷ lệ người dùng nhập | Phải kiểm tra tổng gốc bằng tổng giải ngân. |
 
-Với nhiều giải ngân, chế độ trả nợ gốc và chế độ gom lịch là hai lựa chọn độc lập. Ví dụ: nhiều giải ngân có lịch chung vẫn có thể dùng gốc đều hoặc annuity.
+Ân hạn gốc là một điều kiện riêng, không phải phương thức trả nợ thứ ba. Sau thời gian ân hạn, khoản vay tiếp tục theo một trong hai phương thức trên.
 
 ## 4. Máy tính lãi theo sự kiện
 
@@ -170,7 +161,7 @@ Trên màn hình nhỏ, ba cột “ngày”, “tổng thực trả”, “dư 
 - Giá trị dự án và tiến độ thanh toán CĐT.
 - Nguồn vốn tự có/ngân hàng/kết hợp theo từng đợt.
 - Giải ngân một hoặc nhiều lần với lịch chung.
-- Gốc đều, annuity và chỉ trả lãi trong giai đoạn giải ngân.
+- Hai phương thức: gốc cố định, lãi giảm dần và trả góp đều (annuity).
 - Lãi suất cố định hoặc nhiều giai đoạn, tính theo ngày Actual/365.
 - Trả trước theo lịch, phí phần trăm hoặc biểu phí theo năm, giảm khoản trả hoặc giảm kỳ hạn.
 - List view và phần chi tiết công thức từng kỳ.
