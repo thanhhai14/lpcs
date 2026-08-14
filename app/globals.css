@@ -1710,7 +1710,7 @@ input[type="number"] {
 @media print {
   @page { size: A4 landscape; margin: 9mm; }
   html, body { color: #172b28; background: white; font-family: Arial, sans-serif; }
-  .topbar, .hero, .workspace, .installments-panel, .prepayment-panel, .results-section { display: none !important; }
+  .skip-link, .topbar, .hero, .workspace, .installments-panel, .prepayment-panel, .results-section { display: none !important; }
   .print-report { display: block; color: #172b28; font-size: 8pt; }
   .print-header { padding-bottom: 4mm; display: flex; align-items: flex-end; justify-content: space-between; border-bottom: 1.2pt solid #10483e; }
   .print-header span { color: #1d6a57; font-size: 7pt; font-weight: 800; letter-spacing: .16em; }
