@@ -1,0 +1,353 @@
+"use client";
+
+import { useMemo, useState } from "react";
+import {
+  calculateSchedule,
+  type LoanInput,
+  type Prepayment,
+  type ProjectInstallment,
+  validateLoanInput,
+} from "@/lib/loan";
+import { formatCompactCurrency, formatCurrency, formatDate, moneyInput, parseMoney } from "@/lib/format";
+
+type IconName = "arrow" | "bank" | "calendar" | "chevron" | "info" | "plus" | "trash" | "wallet";
+
+function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
+  const paths: Record<IconName, React.ReactNode> = {
+    arrow: <><path d="M5 12h14" /><path d="m13 6 6 6-6 6" /></>,
+    bank: <><path d="m3 10 9-6 9 6" /><path d="M5 10v8M9 10v8M15 10v8M19 10v8M3 21h18" /></>,
+    calendar: <><path d="M6 2v3M18 2v3M3 8h18" /><rect x="3" y="4" width="18" height="18" rx="2" /></>,
+    chevron: <path d="m9 18 6-6-6-6" />,
+    info: <><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></>,
+    plus: <><path d="M12 5v14M5 12h14" /></>,
+    trash: <><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6" /></>,
+    wallet: <><path d="M4 6h14a2 2 0 0 1 2 2v11H4a2 2 0 0 1-2-2V6a3 3 0 0 1 3-3h12v3" /><path d="M15 12h5M15 12v4h5" /></>,
+  };
+  return <svg aria-hidden="true" className="icon" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
+}
+
+function MoneyField({ id, value, onChange, describedBy }: { id: string; value: number; onChange: (value: number) => void; describedBy?: string }) {
+  return (
+    <div className="money-field">
+      <input id={id} name={id} autoComplete="off" inputMode="numeric" value={moneyInput(value)} onChange={(event) => onChange(parseMoney(event.target.value))} aria-describedby={describedBy} />
+      <span>₫</span>
+    </div>
+  );
+}
+
+const initialInstallments: ProjectInstallment[] = [
+  { id: "dot-1", name: "Ký thỏa thuận", dueDate: "2026-09-15", amountMode: "percentage", percentage: 20, amount: 600_000_000, ownCapitalAmount: 600_000_000, bankCapitalAmount: 0, disbursementDate: "" },
+  { id: "dot-2", name: "Hoàn thành phần móng", dueDate: "2026-12-15", amountMode: "percentage", percentage: 40, amount: 1_200_000_000, ownCapitalAmount: 300_000_000, bankCapitalAmount: 900_000_000, disbursementDate: "2026-12-12" },
+  { id: "dot-3", name: "Bàn giao căn hộ", dueDate: "2027-06-15", amountMode: "amount", percentage: 40, amount: 1_200_000_000, ownCapitalAmount: 300_000_000, bankCapitalAmount: 900_000_000, disbursementDate: "2027-06-12" },
+];
+
+const initialInput: LoanInput = {
+  projectValue: 3_000_000_000,
+  facilityAmount: 1_800_000_000,
+  installments: initialInstallments,
+  termMonths: 120,
+  paymentDay: 15,
+  repaymentMethod: "equal_principal",
+  principalGraceMonths: 6,
+  promotionalRate: 7.5,
+  promotionalMonths: 12,
+  postPromotionalRate: 10.5,
+  prepaymentPenaltyRate: 2,
+  prepaymentEffect: "reduce_term",
+  prepayments: [{ id: "tat-toan-1", date: "2028-12-15", amount: 200_000_000 }],
+};
+
+function nextId(prefix: string) {
+  return `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function resizeInstallment(item: ProjectInstallment, amount: number): ProjectInstallment {
+  const safeAmount = Math.max(0, Math.round(amount));
+  const bankRatio = item.amount > 0 ? item.bankCapitalAmount / item.amount : 0;
+  const bankCapitalAmount = Math.min(safeAmount, Math.round(safeAmount * bankRatio));
+  return { ...item, amount: safeAmount, bankCapitalAmount, ownCapitalAmount: safeAmount - bankCapitalAmount };
+}
+
+export function LoanCalculator() {
+  const [input, setInput] = useState<LoanInput>(initialInput);
+  const [expandedPeriod, setExpandedPeriod] = useState<number | null>(1);
+  const [page, setPage] = useState(1);
+  const validation = useMemo(() => validateLoanInput(input), [input]);
+  const schedule = useMemo(() => calculateSchedule(input), [input]);
+  const pageSize = 18;
+  const pageCount = Math.max(1, Math.ceil(schedule.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const visibleSchedule = schedule.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const totals = useMemo(
+    () => schedule.reduce((result, row) => ({ interest: result.interest + row.interest, penalty: result.penalty + row.prepaymentPenalty, cashflow: result.cashflow + row.totalCashflow }), { interest: 0, penalty: 0, cashflow: 0 }),
+    [schedule],
+  );
+
+  const updateInstallment = (id: string, patch: Partial<ProjectInstallment>) => {
+    setInput((current) => ({ ...current, installments: current.installments.map((item) => item.id === id ? { ...item, ...patch } : item) }));
+  };
+
+  const updateProjectValue = (projectValue: number) => {
+    setInput((current) => ({
+      ...current,
+      projectValue,
+      installments: current.installments.map((item) => item.amountMode === "percentage"
+        ? resizeInstallment(item, projectValue * ((item.percentage ?? 0) / 100))
+        : item),
+    }));
+  };
+
+  const availableFacilityFor = (itemId: string) => {
+    const usedByOtherInstallments = input.installments.reduce(
+      (sum, item) => sum + (item.id === itemId ? 0 : item.bankCapitalAmount),
+      0,
+    );
+    return Math.max(0, input.facilityAmount - usedByOtherInstallments);
+  };
+
+  const updateInstallmentAmount = (item: ProjectInstallment, amount: number) => {
+    setInput((current) => ({
+      ...current,
+      installments: current.installments.map((candidate) => candidate.id === item.id ? resizeInstallment(candidate, amount) : candidate),
+    }));
+  };
+
+  const updateInstallmentPercentage = (item: ProjectInstallment, percentage: number) => {
+    const safePercentage = Math.min(100, Math.max(0, percentage));
+    updateInstallment(item.id, {
+      ...resizeInstallment(item, input.projectValue * (safePercentage / 100)),
+      amountMode: "percentage",
+      percentage: safePercentage,
+    });
+  };
+
+  const setInstallmentAmountMode = (item: ProjectInstallment, amountMode: "amount" | "percentage") => {
+    updateInstallment(item.id, {
+      amountMode,
+      percentage: amountMode === "percentage"
+        ? Number(((item.amount / Math.max(1, input.projectValue)) * 100).toFixed(2))
+        : item.percentage,
+    });
+  };
+
+  const updateBankCapital = (item: ProjectInstallment, requestedAmount: number) => {
+    const bankCapitalAmount = Math.min(item.amount, availableFacilityFor(item.id), Math.max(0, requestedAmount));
+    updateInstallment(item.id, {
+      bankCapitalAmount,
+      ownCapitalAmount: item.amount - bankCapitalAmount,
+      disbursementDate: bankCapitalAmount > 0 ? item.disbursementDate || item.dueDate : "",
+    });
+  };
+
+  const setFundingMode = (item: ProjectInstallment, mode: "own" | "bank" | "mixed") => {
+    if (mode === "own") updateInstallment(item.id, { ownCapitalAmount: item.amount, bankCapitalAmount: 0, disbursementDate: "" });
+    if (mode === "bank") updateBankCapital(item, item.amount);
+    if (mode === "mixed") updateBankCapital(item, Math.min(Math.round(item.amount / 2), availableFacilityFor(item.id)));
+  };
+
+  const addInstallment = () => {
+    setInput((current) => ({ ...current, installments: [...current.installments, { id: nextId("dot"), name: `Đợt ${current.installments.length + 1}`, dueDate: "", amountMode: "amount", amount: 0, ownCapitalAmount: 0, bankCapitalAmount: 0, disbursementDate: "" }] }));
+  };
+
+  const addPrepayment = () => {
+    setInput((current) => ({ ...current, prepayments: [...current.prepayments, { id: nextId("tra-truoc"), date: "", amount: 0 }] }));
+  };
+
+  const updatePrepayment = (id: string, patch: Partial<Prepayment>) => {
+    setInput((current) => ({ ...current, prepayments: current.prepayments.map((item) => item.id === id ? { ...item, ...patch } : item) }));
+  };
+
+  const removeInstallment = (item: ProjectInstallment) => {
+    if (window.confirm(`Xóa “${item.name}” khỏi tiến độ thanh toán?`)) {
+      setInput((current) => ({ ...current, installments: current.installments.filter((candidate) => candidate.id !== item.id) }));
+    }
+  };
+
+  const removePrepayment = (item: Prepayment, index: number) => {
+    if (window.confirm(`Xóa kế hoạch trả trước lần ${index + 1}?`)) {
+      setInput((current) => ({ ...current, prepayments: current.prepayments.filter((candidate) => candidate.id !== item.id) }));
+    }
+  };
+
+  return (
+    <>
+      <a className="skip-link" href="#calculator-main">Bỏ qua phần đầu, đến nội dung chính</a>
+      <main id="calculator-main">
+      <header className="topbar">
+        <a className="brand" href="#top" aria-label="Kế hoạch vay — về đầu trang">
+          <span className="brand-mark"><Icon name="bank" size={20} /></span>
+          <span>Kế hoạch vay</span>
+        </a>
+        <div className="topbar-meta"><span className="status-dot" /> Tự động cập nhật theo dữ liệu nhập</div>
+      </header>
+
+      <section className="hero" id="top">
+        <div className="hero-copy">
+          <span className="eyebrow">Mô phỏng dòng tiền dự án</span>
+          <h1>Biết rõ từng đồng<br />trước khi đặt bút vay.</h1>
+          <p>Lập tiến độ thanh toán, phân bổ nguồn vốn và xem toàn bộ lịch trả nợ trên cùng một kế hoạch.</p>
+        </div>
+        <div className="hero-ledger" aria-label="Tóm tắt kế hoạch">
+          <div><span>Giá trị dự án</span><strong>{formatCurrency(input.projectValue)}</strong></div>
+          <div><span>Vốn ngân hàng / hạn mức</span><strong>{formatCompactCurrency(validation.bankTotal)} / {formatCompactCurrency(input.facilityAmount)}</strong></div>
+          <div><span>Thời hạn dự kiến</span><strong>{input.termMonths} tháng</strong></div>
+        </div>
+      </section>
+
+      <div className="workspace">
+        <section className="panel setup-panel" aria-labelledby="project-title">
+          <div className="section-heading">
+            <div><span className="section-kicker">01 / Thông tin chung</span><h2 id="project-title">Thiết lập khoản vay</h2></div>
+            <span className="section-icon"><Icon name="wallet" /></span>
+          </div>
+          <div className="form-grid">
+            <label className="field"><span>Giá trị dự án</span><MoneyField id="project-value" value={input.projectValue} onChange={updateProjectValue} /><small>Tổng nghĩa vụ thanh toán với chủ đầu tư.</small></label>
+            <label className="field"><span>Hạn mức ngân hàng cho vay</span><MoneyField id="facility-amount" value={input.facilityAmount} onChange={(facilityAmount) => setInput({ ...input, facilityAmount })} /><small>Còn có thể phân bổ {formatCurrency(validation.remainingFacility)}.</small></label>
+            <label className="field"><span>Ngân hàng</span><input name="bank-name" autoComplete="off" placeholder="Ví dụ: Vietcombank…" defaultValue="Ngân hàng dự kiến" /></label>
+            <label className="field"><span>Thời hạn vay</span><div className="suffix-field"><input name="loan-term" autoComplete="off" type="number" min="1" max="480" value={input.termMonths} onChange={(event) => setInput({ ...input, termMonths: Number(event.target.value) })} /><span>tháng</span></div></label>
+            <label className="field"><span>Ngày trả nợ hàng tháng</span><div className="suffix-field"><input name="payment-day" autoComplete="off" type="number" min="1" max="31" value={input.paymentDay} onChange={(event) => setInput({ ...input, paymentDay: Math.min(31, Math.max(1, Number(event.target.value))) })} /><span>hàng tháng</span></div></label>
+            <label className="field"><span>Phương thức trả nợ</span><select name="repayment-method" autoComplete="off" value={input.repaymentMethod} onChange={(event) => setInput({ ...input, repaymentMethod: event.target.value as LoanInput["repaymentMethod"] })}><option value="equal_principal">Gốc đều, lãi giảm dần</option><option value="annuity">Tổng trả gần đều (annuity)</option><option value="interest_only">Chỉ trả lãi khi đang giải ngân</option></select></label>
+            <label className="field"><span>Ân hạn gốc</span><div className="suffix-field"><input name="grace-months" autoComplete="off" type="number" min="0" max={input.termMonths - 1} value={input.principalGraceMonths} onChange={(event) => setInput({ ...input, principalGraceMonths: Number(event.target.value) })} /><span>tháng</span></div></label>
+          </div>
+        </section>
+
+        <aside className="panel rate-panel" aria-labelledby="rate-title">
+          <div className="section-heading compact"><div><span className="section-kicker">02 / Lãi suất</span><h2 id="rate-title">Điều kiện ngân hàng</h2></div></div>
+          <div className="rate-grid">
+            <label className="field"><span>Lãi suất ưu đãi</span><div className="suffix-field"><input name="promotional-rate" autoComplete="off" type="number" min="0" step="0.1" value={input.promotionalRate} onChange={(event) => setInput({ ...input, promotionalRate: Number(event.target.value) })} /><span>%/năm</span></div></label>
+            <label className="field"><span>Thời gian ưu đãi</span><div className="suffix-field"><input name="promotional-months" autoComplete="off" type="number" min="0" value={input.promotionalMonths} onChange={(event) => setInput({ ...input, promotionalMonths: Number(event.target.value) })} /><span>tháng</span></div></label>
+            <label className="field"><span>Lãi sau ưu đãi</span><div className="suffix-field"><input name="post-promotional-rate" autoComplete="off" type="number" min="0" step="0.1" value={input.postPromotionalRate} onChange={(event) => setInput({ ...input, postPromotionalRate: Number(event.target.value) })} /><span>%/năm</span></div></label>
+          </div>
+          <div className="formula-note"><Icon name="info" size={16} /><span>Lãi tính trên dư nợ thực tế theo số ngày, quy ước Actual/365.</span></div>
+        </aside>
+      </div>
+
+      <section className="panel installments-panel" aria-labelledby="installment-title">
+        <div className="section-heading">
+          <div><span className="section-kicker">03 / Tiến độ dự án</span><h2 id="installment-title">Các đợt thanh toán cho chủ đầu tư</h2><p>Chọn nguồn vốn cho từng mốc. Chỉ phần ngân hàng giải ngân mới phát sinh lãi.</p></div>
+          <button className="button secondary" type="button" onClick={addInstallment}><Icon name="plus" size={16} /> Thêm đợt</button>
+        </div>
+
+        <div className="funding-bar" aria-label="Cơ cấu nguồn vốn">
+          <div className="funding-bar-track"><span className="own" style={{ width: `${validation.installmentTotal ? (validation.ownCapitalTotal / validation.installmentTotal) * 100 : 0}%` }} /><span className="bank" style={{ width: `${validation.installmentTotal ? (validation.bankTotal / validation.installmentTotal) * 100 : 0}%` }} /></div>
+          <div className="funding-legend"><span><i className="legend-own" /> Vốn tự có <strong>{formatCompactCurrency(validation.ownCapitalTotal)}</strong></span><span><i className="legend-bank" /> Ngân hàng <strong>{formatCompactCurrency(validation.bankTotal)}</strong></span><span className="funding-total">Đã phân bổ {input.projectValue ? Math.round((validation.installmentTotal / input.projectValue) * 100) : 0}%</span></div>
+        </div>
+
+        <div className="installment-list">
+          {input.installments.map((item, index) => {
+            const isOwn = item.bankCapitalAmount === 0;
+            const isBank = item.ownCapitalAmount === 0 && item.bankCapitalAmount > 0;
+            const mode = isOwn ? "own" : isBank ? "bank" : "mixed";
+            const amountMode = item.amountMode ?? "amount";
+            const availableFacility = availableFacilityFor(item.id);
+            const maxBankForInstallment = Math.min(item.amount, availableFacility);
+            return (
+              <article className="installment-card" key={item.id}>
+                <div className="installment-index"><span>{String(index + 1).padStart(2, "0")}</span><i /></div>
+                <div className="installment-content">
+                  <div className="installment-topline">
+                    <label className="field"><span>Tên đợt</span><input name={`installment-name-${item.id}`} autoComplete="off" value={item.name} onChange={(event) => updateInstallment(item.id, { name: event.target.value })} /></label>
+                    <label className="field"><span>Ngày thanh toán CĐT</span><input name={`installment-date-${item.id}`} autoComplete="off" type="date" value={item.dueDate} onChange={(event) => updateInstallment(item.id, { dueDate: event.target.value })} /></label>
+                    <div className="field installment-amount-field">
+                      <label htmlFor={`amount-${item.id}`}>Giá trị đợt</label>
+                      <div className="amount-entry">
+                        {amountMode === "percentage"
+                          ? <div className="suffix-field"><input id={`amount-${item.id}`} name={`amount-${item.id}`} autoComplete="off" type="number" min="0" max="100" step="0.1" value={item.percentage ?? 0} onChange={(event) => updateInstallmentPercentage(item, Number(event.target.value))} /><span>%</span></div>
+                          : <MoneyField id={`amount-${item.id}`} value={item.amount} onChange={(amount) => updateInstallmentAmount(item, amount)} />}
+                        <div className="amount-mode-switch" role="group" aria-label={`Cách nhập giá trị ${item.name}`}>
+                          <button type="button" className={amountMode === "percentage" ? "active" : ""} onClick={() => setInstallmentAmountMode(item, "percentage")}>%</button>
+                          <button type="button" className={amountMode === "amount" ? "active" : ""} onClick={() => setInstallmentAmountMode(item, "amount")}>VNĐ</button>
+                        </div>
+                      </div>
+                      <small>{amountMode === "percentage" ? `Tương đương ${formatCurrency(item.amount)}` : `Chiếm ${input.projectValue ? ((item.amount / input.projectValue) * 100).toFixed(1) : 0}% giá trị dự án`}</small>
+                    </div>
+                    <button className="icon-button danger" aria-label={`Xóa ${item.name}`} type="button" disabled={input.installments.length === 1} onClick={() => removeInstallment(item)}><Icon name="trash" size={17} /></button>
+                  </div>
+                  <div className="funding-mode" role="group" aria-label={`Nguồn vốn ${item.name}`}>
+                    <button type="button" className={mode === "own" ? "active" : ""} onClick={() => setFundingMode(item, "own")}>Vốn tự có</button>
+                    <button type="button" className={mode === "bank" ? "active" : ""} onClick={() => setFundingMode(item, "bank")}>Ngân hàng</button>
+                    <button type="button" className={mode === "mixed" ? "active" : ""} onClick={() => setFundingMode(item, "mixed")}>Kết hợp</button>
+                  </div>
+                  {mode !== "own" && <div className="funding-details">
+                    {mode === "mixed" && <div className="field"><span>Vốn tự có (tự tính)</span><output className="calculated-value">{formatCurrency(item.ownCapitalAmount)}</output></div>}
+                    <div className="field bank-allocation-field">
+                      <label htmlFor={`bank-${item.id}`}>Ngân hàng giải ngân</label>
+                      <MoneyField id={`bank-${item.id}`} value={item.bankCapitalAmount} onChange={(bankCapitalAmount) => updateBankCapital(item, bankCapitalAmount)} />
+                      <div className="facility-helper"><span>Khả dụng cho đợt này: <strong>{formatCurrency(maxBankForInstallment)}</strong></span><button type="button" disabled={maxBankForInstallment <= 0 || item.bankCapitalAmount === maxBankForInstallment} onClick={() => updateBankCapital(item, maxBankForInstallment)}>Điền tối đa</button></div>
+                    </div>
+                    <label className="field"><span>Ngày dự kiến giải ngân</span><input name={`disbursement-date-${item.id}`} autoComplete="off" type="date" value={item.disbursementDate} onChange={(event) => updateInstallment(item.id, { disbursementDate: event.target.value })} /></label>
+                  </div>}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+        {validation.errors.length > 0 && <div className="validation-box" role="status"><Icon name="info" size={18} /><div>{validation.errors.map((error) => <p key={error}>{error}</p>)}</div></div>}
+      </section>
+
+      <section className="panel prepayment-panel" aria-labelledby="prepayment-title">
+        <div className="section-heading">
+          <div><span className="section-kicker">04 / Trả trước hạn</span><h2 id="prepayment-title">Kế hoạch trả thêm gốc</h2><p>Phí phạt được tính riêng và không làm giảm dư nợ.</p></div>
+          <button className="button secondary" type="button" onClick={addPrepayment}><Icon name="plus" size={16} /> Thêm lần trả trước</button>
+        </div>
+        <div className="prepayment-layout">
+          <div className="prepayment-items">
+            {input.prepayments.length === 0 && <div className="empty-state">Chưa có kế hoạch trả trước. Bạn có thể thêm bất cứ lúc nào.</div>}
+            {input.prepayments.map((item, index) => <div className="prepayment-row" key={item.id}>
+              <span className="prepayment-number">{index + 1}</span>
+              <label className="field"><span>Ngày dự kiến</span><input name={`prepayment-date-${item.id}`} autoComplete="off" type="date" value={item.date} onChange={(event) => updatePrepayment(item.id, { date: event.target.value })} /></label>
+              <label className="field"><span>Số gốc trả thêm</span><MoneyField id={`prepay-${item.id}`} value={item.amount} onChange={(amount) => updatePrepayment(item.id, { amount })} /></label>
+              <button className="icon-button danger" aria-label={`Xóa lần trả trước ${index + 1}`} type="button" onClick={() => removePrepayment(item, index)}><Icon name="trash" size={17} /></button>
+            </div>)}
+          </div>
+          <div className="prepayment-settings">
+            <label className="field"><span>Phí phạt trả trước</span><div className="suffix-field"><input name="prepayment-penalty-rate" autoComplete="off" type="number" min="0" step="0.1" value={input.prepaymentPenaltyRate} onChange={(event) => setInput({ ...input, prepaymentPenaltyRate: Number(event.target.value) })} /><span>% số tiền</span></div></label>
+            <fieldset><legend>Sau khi trả trước</legend><label><input type="radio" name="prepayment-effect" checked={input.prepaymentEffect === "reduce_term"} onChange={() => setInput({ ...input, prepaymentEffect: "reduce_term" })} /><span><strong>Rút ngắn kỳ hạn</strong><small>Giữ gần nguyên phần gốc định kỳ</small></span></label><label><input type="radio" name="prepayment-effect" checked={input.prepaymentEffect === "reduce_payment"} onChange={() => setInput({ ...input, prepaymentEffect: "reduce_payment" })} /><span><strong>Giảm khoản trả</strong><small>Giữ nguyên ngày đáo hạn</small></span></label></fieldset>
+          </div>
+        </div>
+      </section>
+
+      <section className="results-section" aria-labelledby="schedule-title">
+        <div className="results-heading">
+          <div><span className="section-kicker light">05 / Kết quả mô phỏng</span><h2 id="schedule-title">Lịch trả nợ dự kiến</h2><p>Cập nhật tức thì theo kế hoạch ở trên.</p></div>
+          <div className="result-stamp"><span>{schedule.length}</span> kỳ thanh toán</div>
+        </div>
+        <div className="summary-strip">
+          <div><span>Tổng vốn vay</span><strong>{formatCurrency(validation.bankTotal)}</strong></div>
+          <div><span>Tổng lãi dự kiến</span><strong>{formatCurrency(totals.interest)}</strong></div>
+          <div><span>Phí trả trước</span><strong>{formatCurrency(totals.penalty)}</strong></div>
+          <div className="summary-emphasis"><span>Tổng dòng tiền trả ngân hàng</span><strong>{formatCurrency(totals.cashflow)}</strong></div>
+        </div>
+
+        <div className="schedule-shell">
+          {schedule.length === 0 ? <div className="schedule-empty"><Icon name="calendar" size={24} /><h3>Chưa thể tạo lịch trả nợ</h3><p>Hãy thêm ít nhất một đợt giải ngân ngân hàng có ngày dự kiến.</p></div> : <>
+            <div className="table-scroll">
+              <table className="schedule-table">
+                <thead><tr><th aria-label="Mở chi tiết" /><th>Ngày tháng</th><th>Kỳ</th><th className="numeric">Số ngày</th><th className="numeric">Dư nợ còn lại</th><th className="numeric">Gốc phải trả</th><th className="numeric">Lãi phải trả</th><th className="numeric">Gốc + lãi</th><th className="numeric">Trả trước</th><th className="numeric">Phí phạt</th><th className="numeric total-col">Tổng thực trả</th></tr></thead>
+                <tbody>{visibleSchedule.map((row) => <ScheduleTableRows key={row.period} row={row} expanded={expandedPeriod === row.period} onToggle={() => setExpandedPeriod(expandedPeriod === row.period ? null : row.period)} />)}</tbody>
+              </table>
+            </div>
+            <div className="mobile-schedule">{visibleSchedule.map((row) => <ScheduleCard key={row.period} row={row} expanded={expandedPeriod === row.period} onToggle={() => setExpandedPeriod(expandedPeriod === row.period ? null : row.period)} />)}</div>
+            {pageCount > 1 && <nav className="pagination" aria-label="Phân trang lịch trả nợ"><button type="button" disabled={currentPage === 1} onClick={() => setPage(Math.max(1, currentPage - 1))}>Trang trước</button><span>Trang {currentPage} / {pageCount}</span><button type="button" disabled={currentPage === pageCount} onClick={() => setPage(Math.min(pageCount, currentPage + 1))}>Trang sau <Icon name="arrow" size={15} /></button></nav>}
+          </>}
+        </div>
+        <p className="disclaimer"><Icon name="info" size={15} /> Kết quả mang tính tham khảo. Số liệu thực tế phụ thuộc quy tắc làm tròn, ngày hạch toán và điều khoản của ngân hàng.</p>
+      </section>
+      </main>
+    </>
+  );
+}
+
+type RowProps = { row: ReturnType<typeof calculateSchedule>[number]; expanded: boolean; onToggle: () => void };
+
+function SegmentDetails({ row }: { row: RowProps["row"] }) {
+  return <div className="segment-details"><div className="detail-metrics"><span>Dư nợ đầu kỳ <strong>{formatCurrency(row.openingBalance)}</strong></span><span>Giải ngân trong kỳ <strong>{formatCurrency(row.disbursed)}</strong></span><span>Dư nợ cuối kỳ <strong>{formatCurrency(row.closingBalance)}</strong></span></div>{row.segments.length > 0 && <div className="segments"><span className="segment-label">Chi tiết tính lãi</span>{row.segments.map((segment, index) => <div className="segment" key={`${segment.from}-${index}`}><span>{formatDate(segment.from)} <Icon name="arrow" size={13} /> {formatDate(segment.to)}</span><span>{segment.days} ngày × {segment.annualRate}%</span><span>{formatCurrency(segment.interest)}</span></div>)}</div>}</div>;
+}
+
+function ScheduleTableRows({ row, expanded, onToggle }: RowProps) {
+  return <><tr className={expanded ? "expanded" : ""}><td><button className="expand-button" type="button" aria-expanded={expanded} aria-label={`Chi tiết kỳ ${row.period}`} onClick={onToggle}><Icon name="chevron" size={15} /></button></td><td className="date-cell">{formatDate(row.dueDate)}</td><td><span className="period-pill">{String(row.period).padStart(2, "0")}</span></td><td className="numeric muted-number">{row.days}</td><td className="numeric balance-cell">{formatCurrency(row.closingBalance)}</td><td className="numeric">{formatCurrency(row.principal)}</td><td className="numeric">{formatCurrency(row.interest)}</td><td className="numeric">{formatCurrency(row.scheduledPayment)}</td><td className="numeric prepay-cell">{row.prepayment ? formatCurrency(row.prepayment) : "—"}</td><td className="numeric penalty-cell">{row.prepaymentPenalty ? formatCurrency(row.prepaymentPenalty) : "—"}</td><td className="numeric total-col"><strong>{formatCurrency(row.totalCashflow)}</strong></td></tr>{expanded && <tr className="detail-row"><td colSpan={11}><SegmentDetails row={row} /></td></tr>}</>;
+}
+
+function ScheduleCard({ row, expanded, onToggle }: RowProps) {
+  return <article className={`schedule-card ${expanded ? "expanded" : ""}`}><button className="schedule-card-main" type="button" onClick={onToggle} aria-expanded={expanded}><span className="period-pill">Kỳ {row.period}</span><span className="card-date">{formatDate(row.dueDate)} · {row.days} ngày</span><span className="card-total"><small>Tổng thực trả</small><strong>{formatCurrency(row.totalCashflow)}</strong></span><span className="card-chevron"><Icon name="chevron" size={16} /></span><span className="card-balance">Còn lại <strong>{formatCurrency(row.closingBalance)}</strong></span></button>{expanded && <div className="schedule-card-detail"><div className="card-grid"><span>Gốc<strong>{formatCurrency(row.principal)}</strong></span><span>Lãi<strong>{formatCurrency(row.interest)}</strong></span><span>Trả trước<strong>{row.prepayment ? formatCurrency(row.prepayment) : "—"}</strong></span><span>Phí phạt<strong>{row.prepaymentPenalty ? formatCurrency(row.prepaymentPenalty) : "—"}</strong></span></div><SegmentDetails row={row} /></div>}</article>;
+}

@@ -44,6 +44,8 @@ Vui lòng cung cấp hoặc lựa chọn các thông tin bên dưới trước k
 
 Mỗi đợt cần có: `ngày giải ngân`, `số tiền`, và (nếu khác khoản vay chung) `kỳ hạn/đáo hạn riêng`.
 
+Giá trị mỗi đợt thanh toán CĐT có thể được nhập bằng số tiền VNĐ hoặc tỷ lệ phần trăm giá trị dự án. Khi nhập theo phần trăm, số tiền tương ứng được tự động cập nhật nếu giá trị dự án thay đổi.
+
 Ví dụ:
 
 | Đợt | Ngày giải ngân | Số tiền |
@@ -59,6 +61,7 @@ Người dùng nhập `giá trị dự án` và số đợt phải thanh toán c
 - Tên/mốc thanh toán, ngày dự kiến và số tiền hoặc tỷ lệ phần trăm giá trị dự án.
 - Nguồn vốn: vốn tự có, vốn ngân hàng, hoặc kết hợp cả hai.
 - Nếu kết hợp: số vốn tự có và số vốn ngân hàng dự kiến của riêng đợt đó.
+- Ở chế độ kết hợp, người dùng nhập phần ngân hàng giải ngân; vốn tự có được tính bằng phần còn lại. Giao diện hiển thị hạn mức vay còn khả dụng và cho phép điền nhanh số tối đa có thể phân bổ cho đợt.
 - Một đợt thanh toán có thể liên kết với không có, một, hoặc nhiều đợt giải ngân ngân hàng.
 
 Hệ thống phải kiểm tra:
