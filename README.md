@@ -51,6 +51,7 @@
 - Thống kê khoản trả và tiền lãi cao nhất, trung bình, thấp nhất.
 - Hiển thị lại đầy đủ tiến độ thanh toán dự án và cơ cấu nguồn vốn.
 - Lịch trả nợ dạng bảng trên máy tính và dạng thẻ trên thiết bị di động.
+- Hỗ trợ chế độ sáng và tối, tự nhận thiết lập hệ điều hành và ghi nhớ lựa chọn trên thiết bị.
 - Xem chi tiết các đoạn ngày, dư nợ và lãi suất dùng để tính từng kỳ.
 - Xuất Excel gồm ba sheet: **Tổng quan**, **Tiến độ dự án** và **Lịch trả nợ**.
 - In báo cáo A4 ngang có tiến độ dự án, thống kê và toàn bộ lịch trả nợ.

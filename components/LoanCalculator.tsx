@@ -13,7 +13,7 @@ import {
 import { exportLoanWorkbook } from "@/lib/exportExcel";
 import { formatCompactCurrency, formatCurrency, formatDate, moneyInput, parseMoney } from "@/lib/format";
 
-type IconName = "arrow" | "bank" | "calendar" | "chevron" | "download" | "info" | "plus" | "printer" | "trash" | "wallet";
+type IconName = "arrow" | "bank" | "calendar" | "chevron" | "download" | "info" | "moon" | "plus" | "printer" | "sun" | "trash" | "wallet";
 
 function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
   const paths: Record<IconName, React.ReactNode> = {
@@ -23,8 +23,10 @@ function Icon({ name, size = 18 }: { name: IconName; size?: number }) {
     chevron: <path d="m9 18 6-6-6-6" />,
     download: <><path d="M12 3v12" /><path d="m7 10 5 5 5-5" /><path d="M5 21h14" /></>,
     info: <><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></>,
+    moon: <path d="M20 15.3A8.5 8.5 0 0 1 8.7 4a8.5 8.5 0 1 0 11.3 11.3Z" />,
     plus: <><path d="M12 5v14M5 12h14" /></>,
     printer: <><path d="M6 9V3h12v6" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="7" /></>,
+    sun: <><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41" /></>,
     trash: <><path d="M4 7h16M9 7V4h6v3M7 7l1 14h8l1-14M10 11v6M14 11v6" /></>,
     wallet: <><path d="M4 6h14a2 2 0 0 1 2 2v11H4a2 2 0 0 1-2-2V6a3 3 0 0 1 3-3h12v3" /><path d="M15 12h5M15 12v4h5" /></>,
   };
@@ -155,6 +157,7 @@ export function LoanCalculator() {
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState("");
   const [storageReady, setStorageReady] = useState(false);
+  const [theme, setTheme] = useState<"light" | "dark" | null>(null);
   const validation = useMemo(() => validateLoanInput(input), [input]);
   const schedule = useMemo(() => calculateSchedule(input), [input]);
   const schedulePages = useMemo(() => paginateScheduleByYear(schedule), [schedule]);
@@ -180,6 +183,38 @@ export function LoanCalculator() {
   }, [schedule]);
   const reportReady = schedule.length > 0 && validation.errors.length === 0;
   const reportDate = new Intl.DateTimeFormat("vi-VN", { dateStyle: "long", timeZone: "Asia/Ho_Chi_Minh" }).format(new Date());
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const syncTheme = () => {
+      let storedTheme: string | null = null;
+      try {
+        storedTheme = window.localStorage.getItem("lpcs:theme");
+      } catch {
+        // Theme still follows the operating system when storage is unavailable.
+      }
+      const nextTheme = storedTheme === "light" || storedTheme === "dark"
+        ? storedTheme
+        : media.matches ? "dark" : "light";
+      document.documentElement.dataset.theme = nextTheme;
+      document.documentElement.style.colorScheme = nextTheme;
+      setTheme(nextTheme);
+    };
+    const timer = window.setTimeout(syncTheme, 0);
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", syncTheme);
+    } else {
+      media.addListener(syncTheme);
+    }
+    return () => {
+      window.clearTimeout(timer);
+      if (typeof media.removeEventListener === "function") {
+        media.removeEventListener("change", syncTheme);
+      } else {
+        media.removeListener(syncTheme);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -209,6 +244,18 @@ export function LoanCalculator() {
     }, 250);
     return () => window.clearTimeout(timer);
   }, [bankName, input, storageReady]);
+
+  const toggleTheme = () => {
+    const nextTheme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = nextTheme;
+    document.documentElement.style.colorScheme = nextTheme;
+    setTheme(nextTheme);
+    try {
+      window.localStorage.setItem("lpcs:theme", nextTheme);
+    } catch {
+      // The active theme still works for this session when storage is unavailable.
+    }
+  };
 
   const handleExportExcel = async () => {
     if (!reportReady || isExporting) return;
@@ -319,7 +366,20 @@ export function LoanCalculator() {
             <Image className="brand-logo" src="/icon.svg" alt="" width={38} height={38} priority />
             <span>LPCS</span>
           </a>
-          <div className="topbar-meta"><span className="status-dot" /> Tự động lưu dữ liệu trên thiết bị này</div>
+          <div className="topbar-actions">
+            <div className="topbar-meta"><span className="status-dot" /> Tự động lưu dữ liệu trên thiết bị này</div>
+            <button
+              className="theme-toggle"
+              type="button"
+              onClick={toggleTheme}
+              aria-label={theme === "dark" ? "Chuyển sang chế độ sáng" : "Chuyển sang chế độ tối"}
+              aria-pressed={theme === "dark"}
+              title={theme === "dark" ? "Chế độ sáng" : "Chế độ tối"}
+            >
+              <Icon name={theme === "dark" ? "sun" : "moon"} size={16} />
+              <span>{theme === "dark" ? "Sáng" : "Tối"}</span>
+            </button>
+          </div>
         </header>
 
         <section className="hero" id="top">

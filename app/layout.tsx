@@ -15,6 +15,18 @@ const description = "Lập tiến độ thanh toán, phân bổ vốn tự có v
 const vercelProductionUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL ?? process.env.VERCEL_URL;
 const siteUrl = process.env.NEXT_PUBLIC_SITE_URL
   ?? (vercelProductionUrl ? `https://${vercelProductionUrl}` : "http://localhost:3000");
+const themeScript = `
+  (function () {
+    try {
+      var storedTheme = localStorage.getItem("lpcs:theme");
+      var theme = storedTheme === "light" || storedTheme === "dark"
+        ? storedTheme
+        : (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+      document.documentElement.dataset.theme = theme;
+      document.documentElement.style.colorScheme = theme;
+    } catch (_) {}
+  })();
+`;
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -45,7 +57,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="vi">
+    <html lang="vi" suppressHydrationWarning>
+      <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body className={beVietnamPro.variable}>
         {children}
         <Analytics />
