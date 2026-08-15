@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   calculateSchedule,
@@ -315,7 +316,7 @@ export function LoanCalculator() {
       <main id="calculator-main">
         <header className="topbar">
           <a className="brand" href="#top" aria-label="LPCS — về đầu trang">
-            <span className="brand-mark"><Icon name="bank" size={20} /></span>
+            <Image className="brand-logo" src="/icon.svg" alt="" width={38} height={38} priority />
             <span>LPCS</span>
           </a>
           <div className="topbar-meta"><span className="status-dot" /> Tự động lưu dữ liệu trên thiết bị này</div>
@@ -324,7 +325,7 @@ export function LoanCalculator() {
         <section className="hero" id="top">
           <div className="hero-copy">
             <span className="eyebrow">Loan Payment Calculator Spec</span>
-            <h1>Tính toán từng đồng<br />trước khi đặt bút vay.</h1>
+            <h1>Hỗ trợ tính toán<br />trước khi vay ngân hàng.</h1>
             <p>LPCS giúp bạn xây dựng tiến độ thanh toán, phân bổ vốn tự có và vốn ngân hàng, đồng thời theo dõi chi tiết nghĩa vụ trả nợ theo từng tháng.</p>
           </div>
           <div className="hero-ledger" aria-label="Tóm tắt kế hoạch">

@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./app/icon.svg" width="112" height="112" alt="Logo Loan Payment Calculator Spec" />
+</p>
+
 # Loan Payment Calculator Spec (LPCS)
 
 **LPCS** là ứng dụng web lập kế hoạch vay ngân hàng theo tiến độ dự án. Công cụ kết nối ba phần thường phải tính riêng: lịch thanh toán cho chủ đầu tư, nguồn vốn của từng đợt và nghĩa vụ trả nợ ngân hàng theo tháng.
@@ -61,6 +65,14 @@
 
 Ứng dụng hiện không yêu cầu backend, cơ sở dữ liệu hoặc biến môi trường.
 
+Để link preview và canonical URL dùng tên miền riêng thay vì địa chỉ mặc định của Vercel, khai báo:
+
+```bash
+NEXT_PUBLIC_SITE_URL=https://ten-mien-cua-ban.vn
+```
+
+Không thêm dấu gạch chéo ở cuối URL. Nếu biến này chưa được đặt, LPCS tự dùng production URL do Vercel cung cấp.
+
 ## Chạy trên máy cá nhân
 
 Yêu cầu Node.js 20 trở lên và npm.
@@ -119,6 +131,7 @@ Bộ kiểm thử bao gồm các trường hợp giải ngân một lần, nhi�
 
 - [Đặc tả công cụ](documents/loan-payment-calculator-spec.md)
 - [Mô hình tính và dòng tiền](documents/calculation-modes-and-cashflow.md)
+- [Chiến lược quảng cáo và kiếm tiền](documents/ads-monetization-plan.md)
 
 ## Giới hạn trách nhiệm
 
